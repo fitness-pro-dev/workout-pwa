@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Generator PRO</title>
+    <!-- Підключення маніфесту для мобільного додатку -->
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header"><h1>Тренувальний Спліт</h1></header>
+
+        <div class="tabs-container">
+            <button class="tab-btn active" onclick="switchTab('workout')">🏋️ План</button>
+            <button class="tab-btn" onclick="switchTab('analytics')">📈 Аналітика</button>
+        </div>
+
+        <div id="tab-workout">
+            <section class="controls-panel">
+                <div class="input-group">
+                    <label>Днів на тиждень</label>
+                    <input type="number" id="days" value="4" min="1" max="7">
+                </div>
+                <div class="input-group">
+                    <label>Час у день (хв)</label>
+                    <input type="number" id="minutes" value="90" min="10" max="180">
+                </div>
+                <div class="input-group">
+                    <label>Прес (Core)</label>
+                    <select id="absMode" class="prog-input w-100">
+                        <option value="everyday">В кінці кожного дня</option>
+                        <option value="separate">Окремий день</option>
+                        <option value="none">Не робити</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Час на прес (хв)</label>
+                    <input type="number" id="absMinutes" value="15" min="5" max="60">
+                </div>
+                
+                <div class="input-group align-items-center">
+                    <label>Тільки "Вдома"</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="isHome">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="input-group btn-group">
+                    <button class="primary-btn" onclick="generate()">Створити</button>
+                </div>
+            </section>
+
+            <div id="status-message" class="msg text-muted"></div>
+            <div id="schedule-container" class="schedule-grid"></div>
+            <div id="save-section" class="save-section hidden">
+                <button class="primary-btn success-btn" onclick="saveProgress()">💾 Зберегти результати</button>
+            </div>
+        </div>
+
+        <div id="tab-analytics" class="hidden">
+            <div class="day-card">
+                <h2>Прогресія робочої ваги</h2>
+                <select id="chart-selector" class="prog-input w-100 mb-3" onchange="updateChart()"></select>
+                <canvas id="progressChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ПІДКЛЮЧАЄМО БАЗУ ВПРАВ (Файл exercises.js має бути в цій же папці) -->
+    <script src="exercises.js"></script>
+
+    <script>
+        let myChart = null;
+        let analyticsDataStore = [];
+
+        // Робота з локальною пам'яттю телефону
+        function getHistory() { return JSON.parse(localStorage.getItem('workoutAppHistory')) || {}; }
+        function saveHistory(history) { localStorage.setItem('workoutAppHistory', JSON.stringify(history)); }
+
+        function switchTab(tab) {
+            document.getElementById('tab-workout').classList.add('hidden');
+            document.getElementById('tab-analytics').classList.add('hidden');
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (tab === 'analytics') loadAnalytics();
+        }
+
+        function toggleSets(id) { document.getElementById(`sets-${id}`).classList.toggle('hidden'); }
+        function toggleInfo(id) { document.getElementById(`info-${id}`).classList.toggle('hidden'); }
+
+        function mapEx(ex, history) {
+            let prog = history[ex.id];
+            let setsCount = (prog && prog.sets > 0) ? prog.sets : ex.defaultSets;
+            let sw = [];
+            for(let s=0; s<setsCount; s++) {
+                let oldW = (prog && prog.setWeights && prog.setWeights.length > s) ? prog.setWeights[s] : 0;
+                sw.push(oldW > 0 ? oldW + 1 : 0);
+            }
+            return { ...ex, sets: setsCount, reps: ex.defaultReps, suggestedWeights: sw };
+        }
+
+        function renderExerciseHtml(ex, uniqueId, dayIndex) {
+            let setInputsHtml = '';
+            for(let i=0; i<ex.sets; i++) {
+                let w = (ex.suggestedWeights && ex.suggestedWeights[i]) ? ex.suggestedWeights[i] : '';
+                let ph = (ex.category === "Warmup" || ex.category === "Cooldown" || ex.category === "Core") ? "-" : "0";
+                let disabled = (ex.category === "Warmup" || ex.category === "Cooldown") ? "disabled" : "";
+                
+                setInputsHtml += `
+                    <div class="set-row">
+                        <span class="set-num">Підхід ${i+1}:</span>
+                        <div class="weight-wrapper">
+                            <input type="number" step="0.5" class="prog-input weight-input" data-exid="${ex.id}" data-setindex="${i}" value="${w}" placeholder="${ph}" ${disabled}>
+                            <span class="kg-label">кг</span>
+                        </div>
+                        <span class="set-reps">x ${ex.reps}</span>
+                    </div>`;
+            }
+
+            let typeStr = ex.equipment === 'Bodyweight' ? '🏃 Власна вага' : '🏋 Залізо';
+            if(ex.category === "Warmup") typeStr = "🔥 Розминка";
+            if(ex.category === "Cooldown") typeStr = "🧘 Заминка";
+            if(ex.category === "Core") typeStr = "🍫 Прес";
+
+            return `
+                <div class="exercise-item-wrapper" id="wrapper-${uniqueId}">
+                    <div class="exercise-item">
+                        <div class="ex-info-header">
+                            <button class="info-btn" onclick="toggleInfo('${uniqueId}')">i</button>
+                            <div class="ex-info">
+                                <span class="ex-name">${ex.name}</span>
+                                <span class="ex-type">${typeStr} • ${ex.sets}x${ex.reps}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap: 8px;">
+                            ${(ex.category !== "Warmup" && ex.category !== "Cooldown") ? `<button class="toggle-btn swap-btn" onclick="swapExercise('${uniqueId}', '${ex.category}',${dayIndex})">🔄</button>` : ''}
+                            <button class="toggle-btn" onclick="toggleSets('${uniqueId}')">Вага</button>
+                        </div>
+                    </div>
+                    <div id="info-${uniqueId}" class="info-container hidden"><strong>📌 Техніка:</strong><br> ${ex.description}</div>
+                    <div id="sets-${uniqueId}" class="sets-container hidden">
+                        <input type="hidden" class="ex-meta" data-realid="${ex.id}" data-setscount="${ex.sets}">
+                        ${setInputsHtml}
+                    </div>
+                </div>`;
+        }
+
+        function swapExercise(uniqueId, category, dayIndex) {
+            const isHome = document.getElementById('isHome').checked;
+            const btn = document.querySelector(`#wrapper-${uniqueId} .swap-btn`);
+            btn.innerText = "⏳";
+            
+            const dayCard = document.querySelectorAll('.day-card')[dayIndex];
+            const excludeIds = Array.from(dayCard.querySelectorAll('.ex-meta')).map(el => el.getAttribute('data-realid'));
+            
+            let validEx = exercisesList.filter(e => e.category === category && !excludeIds.includes(e.id));
+            
+            if (isHome) {
+                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
+                validEx = validEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
+            }
+
+            if(validEx.length === 0) {
+                btn.innerText = "❌";
+                setTimeout(() => btn.innerText = "🔄", 2000);
+                return;
+            }
+
+            const replacement = validEx[Math.floor(Math.random() * validEx.length)];
+            const history = getHistory();
+            document.getElementById(`wrapper-${uniqueId}`).outerHTML = renderExerciseHtml(mapEx(replacement, history), uniqueId, dayIndex);
+        }
+
+        function generate() {
+            const days = parseInt(document.getElementById('days').value);
+            const minutes = parseInt(document.getElementById('minutes').value);
+            const absMode = document.getElementById('absMode').value;
+            const absMinutes = parseInt(document.getElementById('absMinutes').value);
+            const isHome = document.getElementById('isHome').checked;
+            
+            const container = document.getElementById('schedule-container');
+            const status = document.getElementById('status-message');
+            
+            container.innerHTML = '';
+            document.getElementById('save-section').classList.add('hidden');
+
+            let availableEx = [...exercisesList];
+            if (isHome) {
+                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
+                availableEx = availableEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
+            }
+
+            const warmups = availableEx.filter(e => e.category === "Warmup");
+            const cooldowns = availableEx.filter(e => e.category === "Cooldown");
+            const coreEx = availableEx.filter(e => e.category === "Core");
+            const mainEx = availableEx.filter(e => e.category === "Upper" || e.category === "Lower");
+
+            let splitPattern = [];
+            if (days === 1) splitPattern.push("FullBody");
+            else if (days === 2) splitPattern.push("Upper", "Lower");
+            else if (days === 3) splitPattern.push("Upper", "Lower", "FullBody");
+            else if (days === 4) splitPattern.push("Upper", "Lower", "Upper", "Lower");
+            else if (days === 5) splitPattern.push("Upper", "Lower", "Upper", "Lower", "FullBody");
+            else { for(let i=0; i<days; i++) splitPattern.push(i % 2 === 0 ? "Upper" : "Lower"); }
+
+            if (absMode === "separate" && days >= 2) splitPattern[days - 1] = "Core";
+
+            const history = getHistory();
+            let schedule = [];
+
+            for(let i=0; i<days; i++) {
+                let currentCategory = splitPattern[i];
+                let todaysEx = [];
+
+                if (currentCategory === "FullBody") {
+                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    let max = Math.max(upper.length, lower.length);
+                    for(let j=0; j<max; j++) {
+                        if (j < lower.length) todaysEx.push(lower[j]);
+                        if (j < upper.length) todaysEx.push(upper[j]);
+                    }
+                } else {
+                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                }
+
+                let dailyList = [];
+                let currentMinutes = 0;
+                let timeLimit = minutes;
+
+                let w = warmups.sort(() => Math.random() - 0.5)[0];
+                if (w) { dailyList.push(mapEx(w, history)); currentMinutes += w.timeMinutes; }
+
+                if (absMode === "everyday" && currentCategory !== "Core") timeLimit -= absMinutes;
+
+                for(let ex of todaysEx) {
+                    if (currentMinutes + ex.timeMinutes + 5 <= timeLimit) {
+                        dailyList.push(mapEx(ex, history));
+                        currentMinutes += ex.timeMinutes;
+                    }
+                }
+
+                if (absMode === "everyday" && currentCategory !== "Core") {
+                    let corePool = coreEx.sort(() => Math.random() - 0.5);
+                    let currentAbs = 0;
+                    for(let cEx of corePool) {
+                        if (currentAbs + cEx.timeMinutes <= absMinutes) {
+                            dailyList.push(mapEx(cEx, history));
+                            currentAbs += cEx.timeMinutes;
+                            currentMinutes += cEx.timeMinutes;
+                        }
+                    }
+                }
+
+                let c = cooldowns.sort(() => Math.random() - 0.5)[0];
+                if (c) { dailyList.push(mapEx(c, history)); currentMinutes += c.timeMinutes; }
+
+                let uaCategory = currentCategory === "Upper" ? "Верх тіла" : (currentCategory === "Lower" ? "Низ тіла" : (currentCategory === "Core" ? "Прес (Core)" : "Все тіло"));
+                schedule.push({ dayName: `День ${i + 1} - ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
+            }
+
+            status.innerText = "Програму згенеровано!";
+            status.className = 'msg success';
+
+            schedule.forEach((day, dIdx) => {
+                let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dIdx}_${eIdx}`, dIdx)).join('');
+                container.innerHTML += `<div class="day-card"><div class="day-header"><h2>${day.dayName}</h2><span class="total-time">~${day.totalTime} хв</span></div><div class="exercise-list">${exercisesHtml}</div></div>`;
+            });
+
+            if (schedule.length > 0) document.getElementById('save-section').classList.remove('hidden');
+        }
+
+        function saveProgress() {
+            const history = getHistory();
+            const today = new Date().toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'});
+            
+            document.querySelectorAll('.sets-container:not(.hidden)').forEach(container => {
+                const meta = container.querySelector('.ex-meta');
+                if(!meta) return;
+                const exId = meta.getAttribute('data-realid');
+                const setsCount = parseInt(meta.getAttribute('data-setscount'));
+                
+                if(!history[exId]) {
+                    history[exId] = { sets: setsCount, setWeights: new Array(setsCount).fill(0), historyDates: [], historyWeights: [] };
+                }
+                if(!history[exId].historyDates) history[exId].historyDates = [];
+                if(!history[exId].historyWeights) history[exId].historyWeights = [];
+                
+                let maxWeight = 0;
+                container.querySelectorAll('.weight-input').forEach(input => {
+                    const sIdx = parseInt(input.getAttribute('data-setindex'));
+                    const val = parseFloat(input.value) || 0;
+                    if(val > history[exId].setWeights[sIdx]) history[exId].setWeights[sIdx] = val;
+                    if(val > maxWeight) maxWeight = val;
+                });
+                
+                if(maxWeight > 0) {
+                    history[exId].historyDates.push(today);
+                    history[exId].historyWeights.push(maxWeight);
+                }
+            });
+            
+            saveHistory(history);
+            document.getElementById('status-message').innerText = "✅ Дані збережено на твоєму пристрої!";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function loadAnalytics() {
+            const history = getHistory();
+            analyticsDataStore = Object.keys(history).filter(k => history[k].historyWeights && history[k].historyWeights.length > 0).map(k => {
+                let ex = exercisesList.find(e => e.id === k);
+                return { name: ex ? ex.name : k, dates: history[k].historyDates, weights: history[k].historyWeights };
+            });
+
+            const selector = document.getElementById('chart-selector');
+            selector.innerHTML = '';
+            if(analyticsDataStore.length === 0) {
+                selector.innerHTML = '<option>Немає збережених тренувань</option>';
+                if(myChart) myChart.destroy();
+                return;
+            }
+            analyticsDataStore.forEach((item, index) => { selector.innerHTML += `<option value="${index}">${item.name}</option>`; });
+            updateChart();
+        }
+
+        function updateChart() {
+            const index = document.getElementById('chart-selector').value;
+            const data = analyticsDataStore[index];
+            if(!data) return;
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: data.dates, datasets: [{ label: 'Максимальна вага (кг)', data: data.weights, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 2, tension: 0.3, fill: true }] },
+                options: { scales: { y: { beginAtZero: false, ticks: { color: '#a1a1aa' } }, x: { ticks: { color: '#a1a1aa' } } }, plugins: { legend: { labels: { color: '#fafafa' } } } }
+            });
+        }
+    </script>
+
+    <!-- Підключаємо Service Worker для офлайн-роботи -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('Service Worker зареєстровано!', reg))
+                    .catch(err => console.error('Помилка реєстрації Service Worker', err));
+            });
+        }
+    </script>
+</body>
+</html>
