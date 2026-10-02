@@ -2,17 +2,136 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workout Generator PRO</title>
-    <!-- Підключення маніфесту для мобільного додатку -->
-    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Workout Generator PRO - Cloud</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Підключення Firebase SDK та ініціалізація твоїх ключів -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0fHveK-y9A6tGVOEbv-1uE-gL6oWKvF8",
+            authDomain: "dominikavoyto.firebaseapp.com",
+            projectId: "dominikavoyto",
+            storageBucket: "dominikavoyto.firebasestorage.app",
+            messagingSenderId: "104108514397",
+            appId: "1:104108514397:web:63b1c204ba8c40304a41b4",
+            measurementId: "G-61XDF70Q8S"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.signOut = signOut;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+
+        // Перевірка стану входу користувача
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app-screen').classList.remove('hidden');
+                document.getElementById('user-email-display').innerText = `👤 ${user.email}`;
+                await loadCloudData(user.uid);
+            } else {
+                document.getElementById('auth-screen').classList.remove('hidden');
+                document.getElementById('app-screen').classList.add('hidden');
+            }
+        });
+    </script>
 </head>
-<body>
-    <div class="app-container">
-        <header class="header"><h1>Тренувальний Спліт</h1></header>
+<body data-theme="dark">
+
+    <!-- ЕКРАН АВТОРИЗАЦІЇ -->
+    <div id="auth-screen" class="app-container" style="margin-top: 40px;">
+        <div class="controls-panel" style="text-align: center;">
+            <h1 style="margin-bottom: 12px; font-size: 22px;">🏋️ Workout PRO Cloud</h1>
+            <p class="ex-type" style="margin-bottom: 20px;">Увійди через пошту, щоб твій план і прогрес зберігалися в хмарі</p>
+            
+            <div class="input-group">
+                <input type="email" id="auth-email" class="prog-input" placeholder="Електронна пошта">
+            </div>
+            <div class="input-group">
+                <input type="password" id="auth-password" class="prog-input" placeholder="Пароль (мін. 6 символів)">
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+                <button class="primary-btn" onclick="handleLogin()">Увійти</button>
+                <button class="toggle-btn" onclick="handleRegister()" style="padding: 12px;">Створити новий акаунт</button>
+            </div>
+            <div id="auth-error" class="msg text-muted" style="color: #ef4444; margin-top: 10px; font-size: 13px;"></div>
+        </div>
+    </div>
+
+    <!-- ОСНОВНИЙ ДОДАТОК -->
+    <div id="app-screen" class="app-container hidden">
+        <header class="header">
+            <div>
+                <h1 id="user-email-display">👤 Акаунт</h1>
+                <span id="week-info" class="ex-type">Перевірка плану...</span>
+            </div>
+            <div class="top-bar-btns">
+                <button class="icon-btn" onclick="toggleTheme()" title="Змінити тему">🌓</button>
+                <button class="icon-btn" onclick="handleLogout()" title="Вийти з акаунта" style="color: #ef4444;">🚪 Вийти</button>
+            </div>
+        </header>
+
+        <!-- Головне меню (Вибір при заходах) -->
+        <div id="home-dashboard" class="controls-panel">
+            <h2 style="font-size: 16px; margin-bottom: 12px;">Головне меню</h2>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="primary-btn success-btn" onclick="startActiveWorkout()">🔥 Розпочати тренування</button>
+                <button class="primary-btn" onclick="showGeneratorPanel()">⚙️ Створити план на тиждень</button>
+                <button class="toggle-btn" onclick="openBackupModal()" style="padding: 12px;">💾 Експорт / Імпорт бекапу</button>
+            </div>
+        </div>
+
+        <!-- Панель генератора тижня -->
+        <div id="generator-panel" class="controls-panel hidden">
+            <h2 style="font-size: 16px; margin-bottom: 12px;">Створення плану на тиждень</h2>
+            <div class="input-group">
+                <label>Днів на тиждень</label>
+                <input type="number" id="days" value="4" min="1" max="7">
+            </div>
+            <div class="input-group">
+                <label>Час у день (хв)</label>
+                <input type="number" id="minutes" value="90" min="10" max="180">
+            </div>
+            <div class="input-group">
+                <label>Прес (Core)</label>
+                <select id="absMode" class="prog-input w-100">
+                    <option value="everyday">В кінці кожного дня</option>
+                    <option value="separate">Окремий день</option>
+                    <option value="none">Не робити</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Час на прес (хв)</label>
+                <input type="number" id="absMinutes" value="15" min="5" max="60">
+            </div>
+            <div class="input-group align-items-center">
+                <label>Тільки "Вдома"</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="isHome">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="input-group btn-group" style="display:flex; gap:8px;">
+                <button class="primary-btn" onclick="generateAndSaveWeek()">Зберегти план</button>
+                <button class="toggle-btn" onclick="hideGeneratorPanel()">Назад</button>
+            </div>
+        </div>
 
         <div class="tabs-container">
             <button class="tab-btn active" onclick="switchTab('workout')">🏋️ План</button>
@@ -20,45 +139,8 @@
         </div>
 
         <div id="tab-workout">
-            <section class="controls-panel">
-                <div class="input-group">
-                    <label>Днів на тиждень</label>
-                    <input type="number" id="days" value="4" min="1" max="7">
-                </div>
-                <div class="input-group">
-                    <label>Час у день (хв)</label>
-                    <input type="number" id="minutes" value="90" min="10" max="180">
-                </div>
-                <div class="input-group">
-                    <label>Прес (Core)</label>
-                    <select id="absMode" class="prog-input w-100">
-                        <option value="everyday">В кінці кожного дня</option>
-                        <option value="separate">Окремий день</option>
-                        <option value="none">Не робити</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Час на прес (хв)</label>
-                    <input type="number" id="absMinutes" value="15" min="5" max="60">
-                </div>
-                
-                <div class="input-group align-items-center">
-                    <label>Тільки "Вдома"</label>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="isHome">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="input-group btn-group">
-                    <button class="primary-btn" onclick="generate()">Створити</button>
-                </div>
-            </section>
-
             <div id="status-message" class="msg text-muted"></div>
             <div id="schedule-container" class="schedule-grid"></div>
-            <div id="save-section" class="save-section hidden">
-                <button class="primary-btn success-btn" onclick="saveProgress()">💾 Зберегти результати</button>
-            </div>
         </div>
 
         <div id="tab-analytics" class="hidden">
@@ -70,28 +152,199 @@
         </div>
     </div>
 
-    <!-- ПІДКЛЮЧАЄМО БАЗУ ВПРАВ (Файл exercises.js має бути в цій же папці) -->
-    <script src="exercises.js"></script>
+    <!-- Модалка бекапу -->
+    <div id="backup-modal" class="controls-panel hidden" style="position:fixed; top:20%; left:50%; transform:translateX(-50%); width:90%; max-width:400px; z-index:3000; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+        <h2>Резервна копія даних</h2>
+        <p class="ex-type" style="margin: 10px 0;">Збережи свої дані у файл або завантаж їх назад.</p>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top: 12px;">
+            <button class="primary-btn" onclick="exportDataJSON()">📥 Експортувати JSON</button>
+            <input type="file" id="import-file" class="prog-input" onchange="importDataJSON(event)">
+            <button class="toggle-btn" onclick="closeBackupModal()">Закрити</button>
+        </div>
+    </div>
 
+    <!-- Панель таймера відпочинку -->
+    <div id="rest-timer-bar" class="timer-overlay hidden">
+        <span id="timer-display" class="timer-text">⏳ 01:30</span>
+        <button class="toggle-btn" onclick="stopRestTimer()">Зупинити</button>
+    </div>
+
+    <script src="exercises.js"></script>
     <script>
         let myChart = null;
         let analyticsDataStore = [];
+        let timerInterval = null;
+        let cloudData = { history: {}, weekSchedule: null };
 
-        // Робота з локальною пам'яттю телефону
-        function getHistory() { return JSON.parse(localStorage.getItem('workoutAppHistory')) || {}; }
-        function saveHistory(history) { localStorage.setItem('workoutAppHistory', JSON.stringify(history)); }
-
-        function switchTab(tab) {
-            document.getElementById('tab-workout').classList.add('hidden');
-            document.getElementById('tab-analytics').classList.add('hidden');
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            if (tab === 'analytics') loadAnalytics();
+        async function handleRegister() {
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
+            try {
+                await window.createUserWithEmailAndPassword(window.firebaseAuth, email, pass);
+            } catch (err) {
+                document.getElementById('auth-error').innerText = "Помилка: " + err.message;
+            }
         }
 
-        function toggleSets(id) { document.getElementById(`sets-${id}`).classList.toggle('hidden'); }
-        function toggleInfo(id) { document.getElementById(`info-${id}`).classList.toggle('hidden'); }
+        async function handleLogin() {
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
+            try {
+                await window.signInWithEmailAndPassword(window.firebaseAuth, email, pass);
+            } catch (err) {
+                document.getElementById('auth-error').innerText = "Помилка: " + err.message;
+            }
+        }
+
+        async function handleLogout() {
+            await window.signOut(window.firebaseAuth);
+        }
+
+        async function loadCloudData(uid) {
+            try {
+                const docRef = window.doc(window.firebaseDb, "users", uid);
+                const docSnap = await window.getDoc(docRef);
+                if (docSnap.exists()) {
+                    cloudData = docSnap.data();
+                } else {
+                    cloudData = { history: {}, weekSchedule: null };
+                }
+                initAppAfterLoad();
+            } catch (err) {
+                console.error("Помилка завантаження хмари:", err);
+            }
+        }
+
+        async function saveCloudData() {
+            const user = window.firebaseAuth.currentUser;
+            if (!user) return;
+            try {
+                const docRef = window.doc(window.firebaseDb, "users", user.uid);
+                await window.setDoc(docRef, cloudData);
+            } catch (err) {
+                console.error("Помилка збереження хмари:", err);
+            }
+        }
+
+        function initAppAfterLoad() {
+            if (cloudData.weekSchedule) {
+                document.getElementById('week-info').innerText = "План на тиждень активний";
+                document.getElementById('home-dashboard').classList.remove('hidden');
+            } else {
+                document.getElementById('week-info').innerText = "План не створено";
+                showGeneratorPanel();
+            }
+        }
+
+        function showGeneratorPanel() {
+            document.getElementById('generator-panel').classList.remove('hidden');
+            document.getElementById('home-dashboard').classList.add('hidden');
+        }
+        function hideGeneratorPanel() {
+            document.getElementById('generator-panel').classList.add('hidden');
+            if (cloudData.weekSchedule) document.getElementById('home-dashboard').classList.remove('hidden');
+        }
+
+        function generateAndSaveWeek() {
+            cloudData.weekSchedule = generateScheduleLogic();
+            saveCloudData();
+            document.getElementById('week-info').innerText = "План на тиждень активний";
+            hideGeneratorPanel();
+            renderSchedule(cloudData.weekSchedule);
+            showToast("✨ План на тиждень збережено в хмару!");
+        }
+
+        function startActiveWorkout() {
+            if (!cloudData.weekSchedule) {
+                showGeneratorPanel();
+                return;
+            }
+            document.getElementById('home-dashboard').classList.add('hidden');
+            renderSchedule(cloudData.weekSchedule);
+            showToast("🔥 Тренування розпочато!");
+        }
+
+        function generateScheduleLogic() {
+            const days = parseInt(document.getElementById('days').value);
+            const minutes = parseInt(document.getElementById('minutes').value);
+            const absMode = document.getElementById('absMode').value;
+            const absMinutes = parseInt(document.getElementById('absMinutes').value);
+            const isHome = document.getElementById('isHome').checked;
+
+            let availableEx = [...exercisesList];
+            if (isHome) {
+                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
+                availableEx = availableEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
+            }
+
+            const warmups = availableEx.filter(e => e.category === "Warmup");
+            const cooldowns = availableEx.filter(e => e.category === "Cooldown");
+            const coreEx = availableEx.filter(e => e.category === "Core");
+            const mainEx = availableEx.filter(e => e.category === "Upper" || e.category === "Lower");
+
+            let splitPattern = [];
+            if (days === 1) splitPattern.push("FullBody");
+            else if (days === 2) splitPattern.push("Upper", "Lower");
+            else if (days === 3) splitPattern.push("Upper", "Lower", "FullBody");
+            else if (days === 4) splitPattern.push("Upper", "Lower", "Upper", "Lower");
+            else if (days === 5) splitPattern.push("Upper", "Lower", "Upper", "Lower", "FullBody");
+            else { for(let i=0; i<days; i++) splitPattern.push(i % 2 === 0 ? "Upper" : "Lower"); }
+
+            if (absMode === "separate" && days >= 2) splitPattern[days - 1] = "Core";
+
+            let schedule = [];
+            for(let i=0; i<days; i++) {
+                let currentCategory = splitPattern[i];
+                let todaysEx = [];
+
+                if (currentCategory === "FullBody") {
+                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    let max = Math.max(upper.length, lower.length);
+                    for(let j=0; j<max; j++) {
+                        if (j < lower.length) todaysEx.push(lower[j]);
+                        if (j < upper.length) todaysEx.push(upper[j]);
+                    }
+                } else {
+                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                }
+
+                let dailyList = [];
+                let currentMinutes = 0;
+                let timeLimit = minutes;
+
+                let w = warmups.sort(() => Math.random() - 0.5)[0];
+                if (w) { dailyList.push(mapEx(w, cloudData.history)); currentMinutes += w.timeMinutes; }
+
+                if (absMode === "everyday" && currentCategory !== "Core") timeLimit -= absMinutes;
+
+                for(let ex of todaysEx) {
+                    if (currentMinutes + ex.timeMinutes + 5 <= timeLimit) {
+                        dailyList.push(mapEx(ex, cloudData.history));
+                        currentMinutes += ex.timeMinutes;
+                    }
+                }
+
+                if (absMode === "everyday" && currentCategory !== "Core") {
+                    let corePool = coreEx.sort(() => Math.random() - 0.5);
+                    let currentAbs = 0;
+                    for(let cEx of corePool) {
+                        if (currentAbs + cEx.timeMinutes <= absMinutes) {
+                            dailyList.push(mapEx(cEx, cloudData.history));
+                            currentAbs += cEx.timeMinutes;
+                            currentMinutes += cEx.timeMinutes;
+                        }
+                    }
+                }
+
+                let c = cooldowns.sort(() => Math.random() - 0.5)[0];
+                if (c) { dailyList.push(mapEx(c, cloudData.history)); currentMinutes += c.timeMinutes; }
+
+                let uaCategory = currentCategory === "Upper" ? "Верх тіла" : (currentCategory === "Lower" ? "Низ тіла" : (currentCategory === "Core" ? "Прес" : "Все тіло"));
+                schedule.push({ dayName: `День ${i + 1} - ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
+            }
+            return schedule;
+        }
 
         function mapEx(ex, history) {
             let prog = history[ex.id];
@@ -99,25 +352,34 @@
             let sw = [];
             for(let s=0; s<setsCount; s++) {
                 let oldW = (prog && prog.setWeights && prog.setWeights.length > s) ? prog.setWeights[s] : 0;
-                sw.push(oldW > 0 ? oldW + 1 : 0);
+                sw.push(oldW > 0 ? oldW : 0);
             }
             return { ...ex, sets: setsCount, reps: ex.defaultReps, suggestedWeights: sw };
+        }
+
+        function renderSchedule(schedule) {
+            const container = document.getElementById('schedule-container');
+            container.innerHTML = '';
+            schedule.forEach((day, dIdx) => {
+                let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dIdx}_${eIdx}`, dIdx)).join('');
+                container.innerHTML += `<div class="day-card"><div class="day-header"><h2>${day.dayName}</h2><span class="total-time">~${day.totalTime} хв</span></div><div class="exercise-list">${exercisesHtml}</div></div>`;
+            });
         }
 
         function renderExerciseHtml(ex, uniqueId, dayIndex) {
             let setInputsHtml = '';
             for(let i=0; i<ex.sets; i++) {
                 let w = (ex.suggestedWeights && ex.suggestedWeights[i]) ? ex.suggestedWeights[i] : '';
-                let ph = (ex.category === "Warmup" || ex.category === "Cooldown" || ex.category === "Core") ? "-" : "0";
                 let disabled = (ex.category === "Warmup" || ex.category === "Cooldown") ? "disabled" : "";
                 
                 setInputsHtml += `
                     <div class="set-row">
                         <span class="set-num">Підхід ${i+1}:</span>
                         <div class="weight-wrapper">
-                            <input type="number" step="0.5" class="prog-input weight-input" data-exid="${ex.id}" data-setindex="${i}" value="${w}" placeholder="${ph}" ${disabled}>
+                            <input type="number" step="0.5" class="prog-input weight-input" data-exid="${ex.id}" data-setindex="${i}" value="${w > 0 ? w : ''}" placeholder="0" ${disabled} oninput="autoSaveWeight(this, '${ex.id}', ${i})">
                             <span class="kg-label">кг</span>
                         </div>
+                        ${disabled === "" ? `<button class="toggle-btn" onclick="startRestTimer()">⏳ 90с</button>` : ''}
                         <span class="set-reps">x ${ex.reps}</span>
                     </div>`;
             }
@@ -150,168 +412,110 @@
                 </div>`;
         }
 
-        function swapExercise(uniqueId, category, dayIndex) {
-            const isHome = document.getElementById('isHome').checked;
-            const btn = document.querySelector(`#wrapper-${uniqueId} .swap-btn`);
-            btn.innerText = "⏳";
-            
-            const dayCard = document.querySelectorAll('.day-card')[dayIndex];
-            const excludeIds = Array.from(dayCard.querySelectorAll('.ex-meta')).map(el => el.getAttribute('data-realid'));
-            
-            let validEx = exercisesList.filter(e => e.category === category && !excludeIds.includes(e.id));
-            
-            if (isHome) {
-                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
-                validEx = validEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
-            }
+        function toggleSets(id) { document.getElementById(`sets-${id}`).classList.toggle('hidden'); }
+        function toggleInfo(id) { document.getElementById(`info-${id}`).classList.toggle('hidden'); }
 
-            if(validEx.length === 0) {
-                btn.innerText = "❌";
-                setTimeout(() => btn.innerText = "🔄", 2000);
-                return;
-            }
-
-            const replacement = validEx[Math.floor(Math.random() * validEx.length)];
-            const history = getHistory();
-            document.getElementById(`wrapper-${uniqueId}`).outerHTML = renderExerciseHtml(mapEx(replacement, history), uniqueId, dayIndex);
-        }
-
-        function generate() {
-            const days = parseInt(document.getElementById('days').value);
-            const minutes = parseInt(document.getElementById('minutes').value);
-            const absMode = document.getElementById('absMode').value;
-            const absMinutes = parseInt(document.getElementById('absMinutes').value);
-            const isHome = document.getElementById('isHome').checked;
-            
-            const container = document.getElementById('schedule-container');
-            const status = document.getElementById('status-message');
-            
-            container.innerHTML = '';
-            document.getElementById('save-section').classList.add('hidden');
-
-            let availableEx = [...exercisesList];
-            if (isHome) {
-                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
-                availableEx = availableEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
-            }
-
-            const warmups = availableEx.filter(e => e.category === "Warmup");
-            const cooldowns = availableEx.filter(e => e.category === "Cooldown");
-            const coreEx = availableEx.filter(e => e.category === "Core");
-            const mainEx = availableEx.filter(e => e.category === "Upper" || e.category === "Lower");
-
-            let splitPattern = [];
-            if (days === 1) splitPattern.push("FullBody");
-            else if (days === 2) splitPattern.push("Upper", "Lower");
-            else if (days === 3) splitPattern.push("Upper", "Lower", "FullBody");
-            else if (days === 4) splitPattern.push("Upper", "Lower", "Upper", "Lower");
-            else if (days === 5) splitPattern.push("Upper", "Lower", "Upper", "Lower", "FullBody");
-            else { for(let i=0; i<days; i++) splitPattern.push(i % 2 === 0 ? "Upper" : "Lower"); }
-
-            if (absMode === "separate" && days >= 2) splitPattern[days - 1] = "Core";
-
-            const history = getHistory();
-            let schedule = [];
-
-            for(let i=0; i<days; i++) {
-                let currentCategory = splitPattern[i];
-                let todaysEx = [];
-
-                if (currentCategory === "FullBody") {
-                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
-                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
-                    let max = Math.max(upper.length, lower.length);
-                    for(let j=0; j<max; j++) {
-                        if (j < lower.length) todaysEx.push(lower[j]);
-                        if (j < upper.length) todaysEx.push(upper[j]);
-                    }
-                } else {
-                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
-                }
-
-                let dailyList = [];
-                let currentMinutes = 0;
-                let timeLimit = minutes;
-
-                let w = warmups.sort(() => Math.random() - 0.5)[0];
-                if (w) { dailyList.push(mapEx(w, history)); currentMinutes += w.timeMinutes; }
-
-                if (absMode === "everyday" && currentCategory !== "Core") timeLimit -= absMinutes;
-
-                for(let ex of todaysEx) {
-                    if (currentMinutes + ex.timeMinutes + 5 <= timeLimit) {
-                        dailyList.push(mapEx(ex, history));
-                        currentMinutes += ex.timeMinutes;
-                    }
-                }
-
-                if (absMode === "everyday" && currentCategory !== "Core") {
-                    let corePool = coreEx.sort(() => Math.random() - 0.5);
-                    let currentAbs = 0;
-                    for(let cEx of corePool) {
-                        if (currentAbs + cEx.timeMinutes <= absMinutes) {
-                            dailyList.push(mapEx(cEx, history));
-                            currentAbs += cEx.timeMinutes;
-                            currentMinutes += cEx.timeMinutes;
-                        }
-                    }
-                }
-
-                let c = cooldowns.sort(() => Math.random() - 0.5)[0];
-                if (c) { dailyList.push(mapEx(c, history)); currentMinutes += c.timeMinutes; }
-
-                let uaCategory = currentCategory === "Upper" ? "Верх тіла" : (currentCategory === "Lower" ? "Низ тіла" : (currentCategory === "Core" ? "Прес (Core)" : "Все тіло"));
-                schedule.push({ dayName: `День ${i + 1} - ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
-            }
-
-            status.innerText = "Програму згенеровано!";
-            status.className = 'msg success';
-
-            schedule.forEach((day, dIdx) => {
-                let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dIdx}_${eIdx}`, dIdx)).join('');
-                container.innerHTML += `<div class="day-card"><div class="day-header"><h2>${day.dayName}</h2><span class="total-time">~${day.totalTime} хв</span></div><div class="exercise-list">${exercisesHtml}</div></div>`;
-            });
-
-            if (schedule.length > 0) document.getElementById('save-section').classList.remove('hidden');
-        }
-
-        function saveProgress() {
-            const history = getHistory();
+        // Софт-збереження ваги у хмару на льоту + Ачивки
+        function autoSaveWeight(inputElement, exId, setIndex) {
+            const val = parseFloat(inputElement.value) || 0;
             const today = new Date().toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'});
+
+            if (!cloudData.history[exId]) {
+                cloudData.history[exId] = { sets: 4, setWeights: [], historyDates: [], historyWeights: [] };
+            }
             
-            document.querySelectorAll('.sets-container:not(.hidden)').forEach(container => {
-                const meta = container.querySelector('.ex-meta');
-                if(!meta) return;
-                const exId = meta.getAttribute('data-realid');
-                const setsCount = parseInt(meta.getAttribute('data-setscount'));
-                
-                if(!history[exId]) {
-                    history[exId] = { sets: setsCount, setWeights: new Array(setsCount).fill(0), historyDates: [], historyWeights: [] };
+            let oldWeight = cloudData.history[exId].setWeights[setIndex] || 0;
+            cloudData.history[exId].setWeights[setIndex] = val;
+
+            if (val > 0) {
+                cloudData.history[exId].historyDates.push(today);
+                cloudData.history[exId].historyWeights.push(val);
+                if (val > oldWeight && oldWeight > 0) {
+                    showToast(`🔥 Левелап! +${(val - oldWeight).toFixed(1)} кг до сили!`);
                 }
-                if(!history[exId].historyDates) history[exId].historyDates = [];
-                if(!history[exId].historyWeights) history[exId].historyWeights = [];
-                
-                let maxWeight = 0;
-                container.querySelectorAll('.weight-input').forEach(input => {
-                    const sIdx = parseInt(input.getAttribute('data-setindex'));
-                    const val = parseFloat(input.value) || 0;
-                    if(val > history[exId].setWeights[sIdx]) history[exId].setWeights[sIdx] = val;
-                    if(val > maxWeight) maxWeight = val;
-                });
-                
-                if(maxWeight > 0) {
-                    history[exId].historyDates.push(today);
-                    history[exId].historyWeights.push(maxWeight);
+            }
+            saveCloudData();
+        }
+
+        // Таймер відпочинку (90 секунд)
+        function startRestTimer() {
+            clearInterval(timerInterval);
+            let timeLeft = 90;
+            const bar = document.getElementById('rest-timer-bar');
+            const display = document.getElementById('timer-display');
+            bar.classList.remove('hidden');
+
+            timerInterval = setInterval(() => {
+                let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                let s = (timeLeft % 60).toString().padStart(2, '0');
+                display.innerText = `⏳ ${m}:${s}`;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    bar.classList.add('hidden');
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
                 }
-            });
-            
-            saveHistory(history);
-            document.getElementById('status-message').innerText = "✅ Дані збережено на твоєму пристрої!";
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+                timeLeft--;
+            }, 1000);
+        }
+        function stopRestTimer() {
+            clearInterval(timerInterval);
+            document.getElementById('rest-timer-bar').classList.add('hidden');
+        }
+
+        function showToast(text) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = text;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            body.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+        }
+
+        function openBackupModal() { document.getElementById('backup-modal').classList.remove('hidden'); }
+        function closeBackupModal() { document.getElementById('backup-modal').classList.add('hidden'); }
+
+        function exportDataJSON() {
+            const blob = new Blob([JSON.stringify(cloudData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_workout.json`;
+            a.click();
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    cloudData = JSON.parse(e.target.result);
+                    saveCloudData();
+                    showToast("✅ Дані імпортовано в хмару!");
+                    setTimeout(() => location.reload(), 1500);
+                } catch (err) {
+                    alert("Помилка читання JSON!");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function switchTab(tab) {
+            document.getElementById('tab-workout').classList.add('hidden');
+            document.getElementById('tab-analytics').classList.add('hidden');
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (tab === 'analytics') loadAnalytics();
         }
 
         function loadAnalytics() {
-            const history = getHistory();
+            const history = cloudData.history;
             analyticsDataStore = Object.keys(history).filter(k => history[k].historyWeights && history[k].historyWeights.length > 0).map(k => {
                 let ex = exercisesList.find(e => e.id === k);
                 return { name: ex ? ex.name : k, dates: history[k].historyDates, weights: history[k].historyWeights };
@@ -338,17 +542,6 @@
                 type: 'line',
                 data: { labels: data.dates, datasets: [{ label: 'Максимальна вага (кг)', data: data.weights, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 2, tension: 0.3, fill: true }] },
                 options: { scales: { y: { beginAtZero: false, ticks: { color: '#a1a1aa' } }, x: { ticks: { color: '#a1a1aa' } } }, plugins: { legend: { labels: { color: '#fafafa' } } } }
-            });
-        }
-    </script>
-
-    <!-- Підключаємо Service Worker для офлайн-роботи -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(reg => console.log('Service Worker зареєстровано!', reg))
-                    .catch(err => console.error('Помилка реєстрації Service Worker', err));
             });
         }
     </script>
