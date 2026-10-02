@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Workout Generator PRO - Cloud</title>
+    <title>Workout PRO</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
     
-    <!-- Підключення Firebase SDK та ініціалізація твоїх ключів -->
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -37,80 +37,81 @@
         window.setDoc = setDoc;
         window.getDoc = getDoc;
 
-        // Перевірка стану входу користувача
         onAuthStateChanged(auth, async (user) => {
+            const authScreen = document.getElementById('auth-screen');
+            const appScreen = document.getElementById('app-screen');
             if (user) {
-                document.getElementById('auth-screen').classList.add('hidden');
-                document.getElementById('app-screen').classList.remove('hidden');
-                document.getElementById('user-email-display').innerText = `👤 ${user.email}`;
+                authScreen.classList.add('hidden');
+                appScreen.classList.remove('hidden');
+                document.getElementById('user-email-display').innerText = user.email;
                 await loadCloudData(user.uid);
             } else {
-                document.getElementById('auth-screen').classList.remove('hidden');
-                document.getElementById('app-screen').classList.add('hidden');
+                authScreen.classList.remove('hidden');
+                appScreen.classList.add('hidden');
             }
         });
     </script>
 </head>
 <body data-theme="dark">
 
-    <!-- ЕКРАН АВТОРИЗАЦІЇ -->
-    <div id="auth-screen" class="app-container" style="margin-top: 40px;">
-        <div class="controls-panel" style="text-align: center;">
-            <h1 style="margin-bottom: 12px; font-size: 22px;">🏋️ Workout PRO Cloud</h1>
-            <p class="ex-type" style="margin-bottom: 20px;">Увійди через пошту, щоб твій план і прогрес зберігалися в хмарі</p>
+    <!-- ЕКРАН АВТОРИЗАЦІЇ (Показується першим, якщо користувач не увійшов) -->
+    <div id="auth-screen" class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-logo">WORKOUT PRO</div>
+            <p class="auth-subtitle">Увійди в акаунт або створи новий</p>
             
             <div class="input-group">
-                <input type="email" id="auth-email" class="prog-input" placeholder="Електронна пошта">
+                <input type="email" id="auth-email" class="prog-input" placeholder="Email пошта">
             </div>
             <div class="input-group">
                 <input type="password" id="auth-password" class="prog-input" placeholder="Пароль (мін. 6 символів)">
             </div>
             
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+            <div class="auth-btn-group">
                 <button class="primary-btn" onclick="handleLogin()">Увійти</button>
-                <button class="toggle-btn" onclick="handleRegister()" style="padding: 12px;">Створити новий акаунт</button>
+                <button class="outline-btn" onclick="handleRegister()">Створити акаунт</button>
             </div>
-            <div id="auth-error" class="msg text-muted" style="color: #ef4444; margin-top: 10px; font-size: 13px;"></div>
+            <div id="auth-error" class="auth-error"></div>
         </div>
     </div>
 
-    <!-- ОСНОВНИЙ ДОДАТОК -->
+    <!-- ОСНОВНИЙ ДОДАТОК (З'являється тільки після входу) -->
     <div id="app-screen" class="app-container hidden">
         <header class="header">
-            <div>
-                <h1 id="user-email-display">👤 Акаунт</h1>
-                <span id="week-info" class="ex-type">Перевірка плану...</span>
+            <div class="header-user">
+                <span id="user-email-display" class="user-email">користувач</span>
+                <span id="week-info" class="status-badge">Завантаження...</span>
             </div>
             <div class="top-bar-btns">
-                <button class="icon-btn" onclick="toggleTheme()" title="Змінити тему">🌓</button>
-                <button class="icon-btn" onclick="handleLogout()" title="Вийти з акаунта" style="color: #ef4444;">🚪 Вийти</button>
+                <button class="icon-btn" onclick="toggleTheme()" title="Тема">🌓</button>
+                <button class="icon-btn danger" onclick="handleLogout()" title="Вийти">Вийти</button>
             </div>
         </header>
 
-        <!-- Головне меню (Вибір при заходах) -->
-        <div id="home-dashboard" class="controls-panel">
-            <h2 style="font-size: 16px; margin-bottom: 12px;">Головне меню</h2>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <button class="primary-btn success-btn" onclick="startActiveWorkout()">🔥 Розпочати тренування</button>
+        <!-- Головне меню вибору дій -->
+        <div id="home-dashboard" class="card-panel">
+            <h2 class="section-title">Головне меню</h2>
+            <div class="menu-stack">
+                <button class="primary-btn success" onclick="startActiveWorkout()">🔥 Розпочати тренування</button>
                 <button class="primary-btn" onclick="showGeneratorPanel()">⚙️ Створити план на тиждень</button>
-                <button class="toggle-btn" onclick="openBackupModal()" style="padding: 12px;">💾 Експорт / Імпорт бекапу</button>
+                <button class="outline-btn" onclick="openBackupModal()">💾 Експорт / Імпорт даних</button>
             </div>
         </div>
 
         <!-- Панель генератора тижня -->
-        <div id="generator-panel" class="controls-panel hidden">
-            <h2 style="font-size: 16px; margin-bottom: 12px;">Створення плану на тиждень</h2>
+        <div id="generator-panel" class="card-panel hidden">
+            <h2 class="section-title">Новий тижневий план</h2>
             <div class="input-group">
-                <label>Днів на тиждень</label>
-                <input type="number" id="days" value="4" min="1" max="7">
+                <label>Днів тренувань на тиждень</label>
+                <input type="number" id="days" value="4" min="1" max="7" class="prog-input">
             </div>
             <div class="input-group">
-                <label>Час у день (хв)</label>
-                <input type="number" id="minutes" value="90" min="10" max="180">
+                <label>Тривалість заняття (хв)</label>
+                <input type="number" id="minutes" value="90" min="10" max="180" class="prog-input">
             </div>
             <div class="input-group">
-                <label>Прес (Core)</label>
-                <select id="absMode" class="prog-input w-100">
+                <label>Режим преса (Core)</label>
+                <select id="absMode" class="prog-input">
                     <option value="everyday">В кінці кожного дня</option>
                     <option value="separate">Окремий день</option>
                     <option value="none">Не робити</option>
@@ -118,55 +119,56 @@
             </div>
             <div class="input-group">
                 <label>Час на прес (хв)</label>
-                <input type="number" id="absMinutes" value="15" min="5" max="60">
+                <input type="number" id="absMinutes" value="15" min="5" max="60" class="prog-input">
             </div>
-            <div class="input-group align-items-center">
-                <label>Тільки "Вдома"</label>
+            <div class="input-group row-align">
+                <label>Тільки "Вдома" (без тренажерів)</label>
                 <label class="toggle-switch">
                     <input type="checkbox" id="isHome">
                     <span class="slider"></span>
                 </label>
             </div>
-            <div class="input-group btn-group" style="display:flex; gap:8px;">
+            <div class="menu-stack" style="margin-top: 16px;">
                 <button class="primary-btn" onclick="generateAndSaveWeek()">Зберегти план</button>
-                <button class="toggle-btn" onclick="hideGeneratorPanel()">Назад</button>
+                <button class="outline-btn" onclick="hideGeneratorPanel()">Назад</button>
             </div>
         </div>
 
         <div class="tabs-container">
-            <button class="tab-btn active" onclick="switchTab('workout')">🏋️ План</button>
-            <button class="tab-btn" onclick="switchTab('analytics')">📈 Аналітика</button>
+            <button class="tab-btn active" onclick="switchTab('workout')">Тренування</button>
+            <button class="tab-btn" onclick="switchTab('analytics')">Аналітика</button>
         </div>
 
+        <!-- Вкладка тренувань -->
         <div id="tab-workout">
-            <div id="status-message" class="msg text-muted"></div>
-            <div id="schedule-container" class="schedule-grid"></div>
+            <div id="active-workout-container"></div>
         </div>
 
+        <!-- Вкладка аналітики -->
         <div id="tab-analytics" class="hidden">
-            <div class="day-card">
-                <h2>Прогресія робочої ваги</h2>
-                <select id="chart-selector" class="prog-input w-100 mb-3" onchange="updateChart()"></select>
+            <div class="card-panel">
+                <h2 class="section-title">Прогресія робочої ваги</h2>
+                <select id="chart-selector" class="prog-input mb-3" onchange="updateChart()"></select>
                 <canvas id="progressChart" width="400" height="200"></canvas>
             </div>
         </div>
     </div>
 
     <!-- Модалка бекапу -->
-    <div id="backup-modal" class="controls-panel hidden" style="position:fixed; top:20%; left:50%; transform:translateX(-50%); width:90%; max-width:400px; z-index:3000; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-        <h2>Резервна копія даних</h2>
-        <p class="ex-type" style="margin: 10px 0;">Збережи свої дані у файл або завантаж їх назад.</p>
-        <div style="display:flex; flex-direction:column; gap:8px; margin-top: 12px;">
-            <button class="primary-btn" onclick="exportDataJSON()">📥 Експортувати JSON</button>
+    <div id="backup-modal" class="card-panel hidden modal-box">
+        <h2 class="section-title">Резервна копія</h2>
+        <p class="text-muted text-sm mb-3">Збережи свої дані у файл або завантаж їх.</p>
+        <div class="menu-stack">
+            <button class="primary-btn" onclick="exportDataJSON()">📥 Експорт JSON</button>
             <input type="file" id="import-file" class="prog-input" onchange="importDataJSON(event)">
-            <button class="toggle-btn" onclick="closeBackupModal()">Закрити</button>
+            <button class="outline-btn" onclick="closeBackupModal()">Закрити</button>
         </div>
     </div>
 
-    <!-- Панель таймера відпочинку -->
+    <!-- Плаваючий мінімалістичний таймер відпочинку -->
     <div id="rest-timer-bar" class="timer-overlay hidden">
-        <span id="timer-display" class="timer-text">⏳ 01:30</span>
-        <button class="toggle-btn" onclick="stopRestTimer()">Зупинити</button>
+        <span id="timer-display" class="timer-text">01:30</span>
+        <button class="outline-btn" style="padding: 4px 10px; font-size: 12px;" onclick="stopRestTimer()">Пропустити</button>
     </div>
 
     <script src="exercises.js"></script>
@@ -174,7 +176,7 @@
         let myChart = null;
         let analyticsDataStore = [];
         let timerInterval = null;
-        let cloudData = { history: {}, weekSchedule: null };
+        let cloudData = { history: {}, weekSchedule: null, currentDayIndex: 0 };
 
         async function handleRegister() {
             const email = document.getElementById('auth-email').value;
@@ -182,7 +184,7 @@
             try {
                 await window.createUserWithEmailAndPassword(window.firebaseAuth, email, pass);
             } catch (err) {
-                document.getElementById('auth-error').innerText = "Помилка: " + err.message;
+                document.getElementById('auth-error').innerText = err.message;
             }
         }
 
@@ -192,7 +194,7 @@
             try {
                 await window.signInWithEmailAndPassword(window.firebaseAuth, email, pass);
             } catch (err) {
-                document.getElementById('auth-error').innerText = "Помилка: " + err.message;
+                document.getElementById('auth-error').innerText = err.message;
             }
         }
 
@@ -206,8 +208,9 @@
                 const docSnap = await window.getDoc(docRef);
                 if (docSnap.exists()) {
                     cloudData = docSnap.data();
+                    if(cloudData.currentDayIndex === undefined) cloudData.currentDayIndex = 0;
                 } else {
-                    cloudData = { history: {}, weekSchedule: null };
+                    cloudData = { history: {}, weekSchedule: null, currentDayIndex: 0 };
                 }
                 initAppAfterLoad();
             } catch (err) {
@@ -227,8 +230,8 @@
         }
 
         function initAppAfterLoad() {
-            if (cloudData.weekSchedule) {
-                document.getElementById('week-info').innerText = "План на тиждень активний";
+            if (cloudData.weekSchedule && cloudData.weekSchedule.length > 0) {
+                document.getElementById('week-info').innerText = `План активний (День ${cloudData.currentDayIndex + 1} з ${cloudData.weekSchedule.length})`;
                 document.getElementById('home-dashboard').classList.remove('hidden');
             } else {
                 document.getElementById('week-info').innerText = "План не створено";
@@ -247,21 +250,52 @@
 
         function generateAndSaveWeek() {
             cloudData.weekSchedule = generateScheduleLogic();
+            cloudData.currentDayIndex = 0; // скидаємо на перший день
             saveCloudData();
-            document.getElementById('week-info').innerText = "План на тиждень активний";
+            document.getElementById('week-info').innerText = `План активний (День 1 з ${cloudData.weekSchedule.length})`;
             hideGeneratorPanel();
-            renderSchedule(cloudData.weekSchedule);
-            showToast("✨ План на тиждень збережено в хмару!");
+            document.getElementById('home-dashboard').classList.remove('hidden');
+            showToast("✨ План успішно створено!");
         }
 
+        // Послідовне стартування тренування (День 1, потім День 2 і т.д.)
         function startActiveWorkout() {
-            if (!cloudData.weekSchedule) {
+            if (!cloudData.weekSchedule || cloudData.weekSchedule.length === 0) {
                 showGeneratorPanel();
                 return;
             }
             document.getElementById('home-dashboard').classList.add('hidden');
-            renderSchedule(cloudData.weekSchedule);
-            showToast("🔥 Тренування розпочато!");
+            renderActiveDayWorkout(cloudData.currentDayIndex);
+        }
+
+        function renderActiveDayWorkout(dayIdx) {
+            const container = document.getElementById('active-workout-container');
+            const day = cloudData.weekSchedule[dayIdx];
+            if (!day) return;
+
+            let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dayIdx}_${eIdx}`)).join('');
+            
+            container.innerHTML = `
+                <div class="card-panel">
+                    <div class="day-header-flex">
+                        <h2>${day.dayName}</h2>
+                        <span class="text-sm text-muted">~${day.totalTime} хв</span>
+                    </div>
+                    <div class="exercise-list">${exercisesHtml}</div>
+                    <div style="margin-top: 20px;">
+                        <button class="primary-btn success" onclick="finishWorkout(${dayIdx})">💾 Завершити і зберегти тренування</button>
+                    </div>
+                </div>`;
+        }
+
+        function finishWorkout(dayIdx) {
+            // Переходимо до наступного дня циклічно
+            cloudData.currentDayIndex = (dayIdx + 1) % cloudData.weekSchedule.length;
+            saveCloudData();
+            document.getElementById('week-info').innerText = `План активний (Наступний: День ${cloudData.currentDayIndex + 1})`;
+            document.getElementById('active-workout-container').innerHTML = '';
+            document.getElementById('home-dashboard').classList.remove('hidden');
+            showToast("🎉 Тренування збережено! Молодець!");
         }
 
         function generateScheduleLogic() {
@@ -298,15 +332,15 @@
                 let todaysEx = [];
 
                 if (currentCategory === "FullBody") {
-                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
-                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5);
+                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5);
                     let max = Math.max(upper.length, lower.length);
                     for(let j=0; j<max; j++) {
                         if (j < lower.length) todaysEx.push(lower[j]);
                         if (j < upper.length) todaysEx.push(upper[j]);
                     }
                 } else {
-                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5).sort((a,b) => b.complexity - a.complexity);
+                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5);
                 }
 
                 let dailyList = [];
@@ -325,23 +359,11 @@
                     }
                 }
 
-                if (absMode === "everyday" && currentCategory !== "Core") {
-                    let corePool = coreEx.sort(() => Math.random() - 0.5);
-                    let currentAbs = 0;
-                    for(let cEx of corePool) {
-                        if (currentAbs + cEx.timeMinutes <= absMinutes) {
-                            dailyList.push(mapEx(cEx, cloudData.history));
-                            currentAbs += cEx.timeMinutes;
-                            currentMinutes += cEx.timeMinutes;
-                        }
-                    }
-                }
-
                 let c = cooldowns.sort(() => Math.random() - 0.5)[0];
                 if (c) { dailyList.push(mapEx(c, cloudData.history)); currentMinutes += c.timeMinutes; }
 
                 let uaCategory = currentCategory === "Upper" ? "Верх тіла" : (currentCategory === "Lower" ? "Низ тіла" : (currentCategory === "Core" ? "Прес" : "Все тіло"));
-                schedule.push({ dayName: `День ${i + 1} - ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
+                schedule.push({ dayName: `День ${i + 1} — ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
             }
             return schedule;
         }
@@ -357,16 +379,7 @@
             return { ...ex, sets: setsCount, reps: ex.defaultReps, suggestedWeights: sw };
         }
 
-        function renderSchedule(schedule) {
-            const container = document.getElementById('schedule-container');
-            container.innerHTML = '';
-            schedule.forEach((day, dIdx) => {
-                let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dIdx}_${eIdx}`, dIdx)).join('');
-                container.innerHTML += `<div class="day-card"><div class="day-header"><h2>${day.dayName}</h2><span class="total-time">~${day.totalTime} хв</span></div><div class="exercise-list">${exercisesHtml}</div></div>`;
-            });
-        }
-
-        function renderExerciseHtml(ex, uniqueId, dayIndex) {
+        function renderExerciseHtml(ex, uniqueId) {
             let setInputsHtml = '';
             for(let i=0; i<ex.sets; i++) {
                 let w = (ex.suggestedWeights && ex.suggestedWeights[i]) ? ex.suggestedWeights[i] : '';
@@ -374,48 +387,32 @@
                 
                 setInputsHtml += `
                     <div class="set-row">
-                        <span class="set-num">Підхід ${i+1}:</span>
-                        <div class="weight-wrapper">
-                            <input type="number" step="0.5" class="prog-input weight-input" data-exid="${ex.id}" data-setindex="${i}" value="${w > 0 ? w : ''}" placeholder="0" ${disabled} oninput="autoSaveWeight(this, '${ex.id}', ${i})">
-                            <span class="kg-label">кг</span>
+                        <span class="text-sm">Підхід ${i+1}</span>
+                        <div class="weight-flex">
+                            <input type="number" step="0.5" class="prog-input text-center" value="${w > 0 ? w : ''}" placeholder="0" ${disabled} oninput="autoSaveWeight(this, '${ex.id}', ${i})">
+                            <span class="text-sm text-muted">кг</span>
                         </div>
-                        ${disabled === "" ? `<button class="toggle-btn" onclick="startRestTimer()">⏳ 90с</button>` : ''}
-                        <span class="set-reps">x ${ex.reps}</span>
+                        <span class="text-sm text-muted">× ${ex.reps}</span>
+                        ${disabled === "" ? `<button class="outline-btn" style="padding: 4px 8px; font-size:11px;" onclick="startRestTimer()">⏳ 90с</button>` : ''}
                     </div>`;
             }
 
-            let typeStr = ex.equipment === 'Bodyweight' ? '🏃 Власна вага' : '🏋 Залізо';
-            if(ex.category === "Warmup") typeStr = "🔥 Розминка";
-            if(ex.category === "Cooldown") typeStr = "🧘 Заминка";
-            if(ex.category === "Core") typeStr = "🍫 Прес";
-
             return `
-                <div class="exercise-item-wrapper" id="wrapper-${uniqueId}">
-                    <div class="exercise-item">
-                        <div class="ex-info-header">
-                            <button class="info-btn" onclick="toggleInfo('${uniqueId}')">i</button>
-                            <div class="ex-info">
-                                <span class="ex-name">${ex.name}</span>
-                                <span class="ex-type">${typeStr} • ${ex.sets}x${ex.reps}</span>
-                            </div>
+                <div class="exercise-card">
+                    <div class="exercise-top">
+                        <div>
+                            <span class="exercise-title">${ex.name}</span>
+                            <span class="text-sm text-muted">${ex.sets} підходів • ${ex.reps}</span>
                         </div>
-                        <div style="display:flex; gap: 8px;">
-                            ${(ex.category !== "Warmup" && ex.category !== "Cooldown") ? `<button class="toggle-btn swap-btn" onclick="swapExercise('${uniqueId}', '${ex.category}',${dayIndex})">🔄</button>` : ''}
-                            <button class="toggle-btn" onclick="toggleSets('${uniqueId}')">Вага</button>
-                        </div>
+                        <button class="outline-btn" onclick="toggleInfo('${uniqueId}')">Опис</button>
                     </div>
-                    <div id="info-${uniqueId}" class="info-container hidden"><strong>📌 Техніка:</strong><br> ${ex.description}</div>
-                    <div id="sets-${uniqueId}" class="sets-container hidden">
-                        <input type="hidden" class="ex-meta" data-realid="${ex.id}" data-setscount="${ex.sets}">
-                        ${setInputsHtml}
-                    </div>
+                    <div id="info-${uniqueId}" class="info-box hidden"><strong>Техніка:</strong> ${ex.description}</div>
+                    <div class="sets-stack">${setInputsHtml}</div>
                 </div>`;
         }
 
-        function toggleSets(id) { document.getElementById(`sets-${id}`).classList.toggle('hidden'); }
         function toggleInfo(id) { document.getElementById(`info-${id}`).classList.toggle('hidden'); }
 
-        // Софт-збереження ваги у хмару на льоту + Ачивки
         function autoSaveWeight(inputElement, exId, setIndex) {
             const val = parseFloat(inputElement.value) || 0;
             const today = new Date().toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'});
@@ -431,13 +428,13 @@
                 cloudData.history[exId].historyDates.push(today);
                 cloudData.history[exId].historyWeights.push(val);
                 if (val > oldWeight && oldWeight > 0) {
-                    showToast(`🔥 Левелап! +${(val - oldWeight).toFixed(1)} кг до сили!`);
+                    showToast(`🔥 Прогрес! +${(val - oldWeight).toFixed(1)} кг!`);
                 }
             }
             saveCloudData();
         }
 
-        // Таймер відпочинку (90 секунд)
+        // Таймер відпочинку з можливістю дострокового завершення
         function startRestTimer() {
             clearInterval(timerInterval);
             let timeLeft = 90;
@@ -448,15 +445,15 @@
             timerInterval = setInterval(() => {
                 let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
                 let s = (timeLeft % 60).toString().padStart(2, '0');
-                display.innerText = `⏳ ${m}:${s}`;
+                display.innerText = `${m}:${s}`;
                 if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    bar.classList.add('hidden');
-                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    stopRestTimer();
+                    if (navigator.vibrate) navigator.vibrate(200);
                 }
                 timeLeft--;
             }, 1000);
         }
+
         function stopRestTimer() {
             clearInterval(timerInterval);
             document.getElementById('rest-timer-bar').classList.add('hidden');
@@ -464,16 +461,17 @@
 
         function showToast(text) {
             const toast = document.createElement('div');
-            toast.className = 'toast';
+            toast.className = 'toast-msg';
             toast.innerText = text;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
 
+        // Виправлене перемикання тем
         function toggleTheme() {
             const body = document.body;
-            const currentTheme = body.getAttribute('data-theme');
-            body.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+            const current = body.getAttribute('data-theme');
+            body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
         }
 
         function openBackupModal() { document.getElementById('backup-modal').classList.remove('hidden'); }
@@ -496,10 +494,10 @@
                 try {
                     cloudData = JSON.parse(e.target.result);
                     saveCloudData();
-                    showToast("✅ Дані імпортовано в хмару!");
+                    showToast("✅ Імпорт успішний!");
                     setTimeout(() => location.reload(), 1500);
                 } catch (err) {
-                    alert("Помилка читання JSON!");
+                    alert("Помилка JSON файлу!");
                 }
             };
             reader.readAsText(file);
@@ -524,7 +522,7 @@
             const selector = document.getElementById('chart-selector');
             selector.innerHTML = '';
             if(analyticsDataStore.length === 0) {
-                selector.innerHTML = '<option>Немає збережених тренувань</option>';
+                selector.innerHTML = '<option>Немає даних аналітики</option>';
                 if(myChart) myChart.destroy();
                 return;
             }
@@ -540,8 +538,8 @@
             if (myChart) myChart.destroy();
             myChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels: data.dates, datasets: [{ label: 'Максимальна вага (кг)', data: data.weights, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 2, tension: 0.3, fill: true }] },
-                options: { scales: { y: { beginAtZero: false, ticks: { color: '#a1a1aa' } }, x: { ticks: { color: '#a1a1aa' } } }, plugins: { legend: { labels: { color: '#fafafa' } } } }
+                data: { labels: data.dates, datasets: [{ label: 'Макс. вага (кг)', data: data.weights, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.2, fill: true }] },
+                options: { scales: { y: { ticks: { color: 'var(--text-muted)' } }, x: { ticks: { color: 'var(--text-muted)' } } }, plugins: { legend: { labels: { color: 'var(--text-color)' } } } }
             });
         }
     </script>
