@@ -12,23 +12,30 @@
     --hover-glow: 0 0 15px rgba(241, 245, 249, 0.06);
 }
 
+[data-theme="light"] {
+    --bg-color: #f4f4f6; 
+    --card-bg: #ffffff; 
+    --input-bg: #f9f9fb;
+    --text-color: #111113; 
+    --text-muted: #66666d;
+    --accent-color: #111113;
+    --accent-text: #ffffff;
+    --border-color: #e2e2e6;
+    --danger: #ff3b30;
+    --glow-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    --hover-glow: 0 0 15px rgba(17, 17, 19, 0.04);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; }
 
 body { 
-    background: linear-gradient(-45deg, #050505, #0d0d0e, #141416, #09090a);
-    background-size: 300% 300%;
-    animation: gradientBG 25s ease infinite;
+    background-color: var(--bg-color);
     color: var(--text-color); 
     display: flex; 
     justify-content: center; 
     min-height: 100vh; 
     padding: 20px 16px; 
-}
-
-@keyframes gradientBG {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .app-container { width: 100%; max-width: 440px; padding-bottom: 80px; }
@@ -63,11 +70,66 @@ body {
 }
 .level-circle span { font-size: 9px; color: var(--text-muted); font-weight: 400; line-height: 1; }
 
+/* Вкладки (Tabs) та плавна анімація */
 /* Вкладки (Tabs) */
-.tabs { position: relative; display: flex; background-color: var(--card-bg); border-radius: 12px; padding: 4px; margin-bottom: 24px; box-shadow: var(--glow-shadow); z-index: 1; }
-.tab { flex: 1; text-align: center; padding: 10px; color: var(--text-muted); cursor: pointer; font-weight: 500; font-size: 14px; z-index: 2; transition: color 0.3s ease; }
-.tab.active { color: var(--accent-text); }
-.tab-slider { position: absolute; top: 4px; bottom: 4px; width: calc(33.333% - 2.6px); background-color: var(--accent-color); border-radius: 8px; z-index: -1; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); }
+.tabs { 
+    position: relative; 
+    display: flex; 
+    background-color: var(--card-bg); 
+    border-radius: 12px; 
+    padding: 4px; 
+    margin-bottom: 24px; 
+    box-shadow: var(--glow-shadow); 
+    overflow: hidden;
+    z-index: 1; 
+}
+
+.tab { 
+    flex: 1; 
+    text-align: center; 
+    padding: 10px; 
+    color: var(--text-muted); 
+    cursor: pointer; 
+    font-weight: 500; 
+    font-size: 14px; 
+    z-index: 2; 
+    transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+
+.tab.active { 
+    color: var(--accent-text); 
+}
+
+/* Динамічний рухомий бігунок зі стисненням при переході */
+.tab-slider { 
+    position: absolute; 
+    top: 4px; 
+    bottom: 4px; 
+    width: calc(33.333% - 2.6px); 
+    background-color: var(--accent-color); 
+    border-radius: 8px; 
+    z-index: -1; 
+    transform-origin: center;
+    transition: transform 0.45s cubic-bezier(0.25, 1.4, 0.5, 1), background-color 0.3s ease; 
+}
+
+/* Клас, який запускає ефект стиснення та розширення бігунка під час руху */
+.tab-slider-anim {
+    animation: sliderSquish 0.45s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes sliderSquish {
+    0% {
+        transform: translateX(var(--from-x)) scaleX(1);
+    }
+    50% {
+        /* У середині шляху (в зоні стику) бігунок помітно стискається по ширині */
+        transform: translateX(var(--mid-x)) scaleX(0.75);
+    }
+    100% {
+        transform: translateX(var(--to-x)) scaleX(1);
+    }
+}
 
 .view-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
 .view-tab { flex: 1; text-align: center; padding: 8px; background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 8px; cursor: pointer; font-size: 13px; transition: 0.2s; }
@@ -75,7 +137,7 @@ body {
 
 /* Картки */
 .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; margin-bottom: 16px; box-shadow: var(--glow-shadow); transition: all 0.3s ease; }
-.card:hover { box-shadow: var(--hover-glow); border-color: rgba(241, 245, 249, 0.1); }
+.card:hover { box-shadow: var(--hover-glow); border-color: var(--border-color); }
 
 /* М'які розділи налаштувань */
 .settings-section-card {
@@ -97,13 +159,13 @@ body {
     color: var(--text-color);
 }
 .settings-section-header:hover {
-    background-color: rgba(241, 245, 249, 0.02);
+    background-color: rgba(128, 128, 128, 0.05);
 }
 .settings-section-content {
     padding: 0 16px 16px 16px;
     border-top: 1px solid var(--border-color);
     display: none;
-    background-color: #09090b;
+    background-color: var(--card-bg);
 }
 .settings-section-card.open .settings-section-content {
     display: block;
@@ -118,20 +180,19 @@ body {
     transform: rotate(180deg);
 }
 
-/* Приглушені кнопки в налаштуваннях */
+/* Кнопки в налаштуваннях */
 .settings-section-content .btn {
-    background-color: #1f1f23;
-    color: #f1f5f9;
+    background-color: var(--input-bg);
+    color: var(--text-color);
     border: 1px solid var(--border-color);
 }
 .settings-section-content .btn:hover {
-    background-color: #27272a;
     border-color: var(--text-muted);
 }
 
 /* Картка списку */
 .plan-card { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 12px; transition: all 0.3s ease; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-.plan-card:hover { box-shadow: var(--hover-glow); border-color: rgba(241, 245, 249, 0.15); transform: translateY(-2px); }
+.plan-card:hover { box-shadow: var(--hover-glow); transform: translateY(-2px); }
 .plan-card-content { flex: 1; }
 .plan-delete-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: all 0.2s ease; font-size: 14px; margin-left: 12px; }
 .plan-delete-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(255, 69, 58, 0.1); }
@@ -148,7 +209,7 @@ body {
 /* Форми та Інпути */
 .input-group { margin-bottom: 16px; }
 .input-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
-.input { width: 100%; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 16px; color: var(--text-color); font-size: 15px; outline: none; transition: border-color 0.2s; color-scheme: dark; }
+.input { width: 100%; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 16px; color: var(--text-color); font-size: 15px; outline: none; transition: border-color 0.2s; }
 .input:focus { border-color: var(--text-muted); }
 .row-align { display: flex; justify-content: space-between; align-items: center; }
 
@@ -163,7 +224,7 @@ body {
 .btn { width: 100%; background-color: var(--accent-color); color: var(--accent-text); padding: 16px; border-radius: 12px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; text-align: center; margin-top: 8px; transition: opacity 0.2s; }
 .btn:hover { opacity: 0.9; }
 .btn-outline { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); transition: border-color 0.2s; }
-.btn-outline:hover { border-color: var(--text-color); background-color: rgba(241, 245, 249, 0.05); }
+.btn-outline:hover { border-color: var(--text-color); background-color: rgba(128, 128, 128, 0.05); }
 .btn-danger { background-color: rgba(255, 69, 58, 0.1); color: var(--danger); border: 1px solid rgba(255, 69, 58, 0.3); }
 .btn-danger:hover { background-color: rgba(255, 69, 58, 0.2); }
 .btn-text { background: transparent; border: none; color: var(--text-muted); font-size: 14px; width: 100%; padding: 12px; cursor: pointer; margin-top: 8px; transition: color 0.2s; }
@@ -171,7 +232,7 @@ body {
 
 /* Дії */
 .action-btn { background-color: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px; }
-.action-btn:hover { background-color: rgba(241, 245, 249, 0.05); border-color: var(--text-muted); }
+.action-btn:hover { background-color: rgba(128, 128, 128, 0.05); border-color: var(--text-muted); }
 .icon-circle { display: inline-flex; justify-content: center; align-items: center; width: 16px; height: 16px; border: 1.5px solid var(--text-muted); border-radius: 50%; font-family: serif; font-style: italic; font-size: 11px; color: var(--text-muted); transition: 0.2s; }
 .action-btn:hover .icon-circle { border-color: var(--text-color); color: var(--text-color); }
 .icon-refresh { font-size: 16px; line-height: 1; color: var(--text-muted); transition: 0.2s; }
@@ -179,7 +240,7 @@ body {
 
 /* Екран Огляду */
 .ex-preview-item { background-color: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; margin-bottom: 12px; transition: all 0.3s ease; }
-.ex-preview-item:hover { box-shadow: var(--hover-glow); border-color: rgba(241, 245, 249, 0.1); }
+.ex-preview-item:hover { box-shadow: var(--hover-glow); border-color: var(--border-color); }
 .ex-preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;}
 .ex-preview-name { font-weight: 600; font-size: 15px; }
 .ex-preview-stats { font-size: 13px; color: var(--text-muted); background: var(--card-bg); padding: 4px 8px; border-radius: 6px; }
@@ -191,16 +252,16 @@ body {
 .ex-name { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
 .ex-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; background-color: var(--card-bg); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); }
 .set-row { display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); padding: 14px 16px; border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border-color); transition: border-color 0.2s; }
-.set-row:hover { border-color: rgba(241, 245, 249, 0.1); }
-.weight-input { width: 70px; text-align: center; background-color: var(--input-bg); border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 8px; font-size: 16px; transition: border-color 0.2s; }
+.set-row:hover { border-color: var(--text-muted); }
+.weight-input { width: 70px; text-align: center; background-color: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; border-radius: 8px; font-size: 16px; transition: border-color 0.2s; }
 .weight-input:focus { border-color: var(--text-color); }
 .rest-view { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; }
 .rest-timer { font-size: 64px; font-weight: 700; margin-bottom: 40px; font-variant-numeric: tabular-nums; }
 
 /* Кастомні модальні вікна */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; opacity: 1; transition: opacity 0.3s ease; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; opacity: 1; transition: opacity 0.3s ease; }
 .modal-overlay.hidden { opacity: 0; pointer-events: none; }
-.modal-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 24px; border-radius: 20px; width: 90%; max-width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+.modal-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 24px; border-radius: 20px; width: 90%; max-width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
 .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; text-align: center; }
 .modal-msg { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 24px; line-height: 1.5; }
 .modal-actions { display: flex; gap: 12px; }
@@ -214,6 +275,6 @@ body {
 .toggle-switch { position: relative; display: inline-block; width: 48px; height: 28px; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .3s; border-radius: 28px; }
-.slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+.slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: var(--text-color); transition: .3s; border-radius: 50%; }
 input:checked + .slider { background-color: var(--text-color); }
 input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }

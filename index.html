@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Тренувальний Спліт</title>
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
-    <!-- Підключення маніфесту для встановлення як додаток -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#050505">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icon.png">
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -261,6 +261,23 @@
             <div class="card">
                 <h2 class="card-title" style="margin-bottom: 20px;">Налаштування</h2>
                 
+                <!-- Розділ 0: Зовнішній вигляд (Тема) -->
+                <div class="settings-section-card" id="sec-theme">
+                    <div class="settings-section-header" onclick="toggleSettingsSection('sec-theme')">
+                        <span>Зовнішній вигляд (Тема)</span>
+                        <span class="settings-arrow">▼</span>
+                    </div>
+                    <div class="settings-section-content">
+                        <div class="input-group row-align">
+                            <label style="margin-bottom:0;">Світла тема</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="theme-toggle" onchange="toggleTheme()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Розділ 1: Профіль -->
                 <div class="settings-section-card" id="sec-profile">
                     <div class="settings-section-header" onclick="toggleSettingsSection('sec-profile')">
@@ -333,7 +350,7 @@
     
     <script>
         let myChart = null, analyticsDataStore = [];
-        let cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [] };
+        let cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [], theme: "dark" };
         let currentPlanId = null; 
         let currentOverviewMode = 'day';
         let activeExIdx = 0, restTime = 0, restInterval = null;
@@ -391,8 +408,17 @@
         }
 
         window.switchMainTab = function(tabName, index, el) {
-            ['plan', 'analytics', 'settings'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
-            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            ['plan', 'analytics', 'settings'].forEach(t => {
+                const tabEl = document.getElementById(`tab-${t}`);
+                tabEl.classList.add('hidden');
+                tabEl.classList.remove('tab-content-anim');
+            });
+
+            const activeTabEl = document.getElementById(`tab-${tabName}`);
+            activeTabEl.classList.remove('hidden');
+            void activeTabEl.offsetWidth; 
+            activeTabEl.classList.add('tab-content-anim');
+
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             el.classList.add('active');
             document.getElementById('tab-slider').style.transform = `translateX(${index * 100}%)`;
@@ -462,6 +488,25 @@
             setTimeout(() => document.getElementById('settings-msg').innerText = "", 3000);
         }
 
+        window.toggleTheme = async function() {
+            const isLight = document.getElementById('theme-toggle').checked;
+            cloudData.theme = isLight ? "light" : "dark";
+            applyTheme(cloudData.theme);
+            await saveCloudData();
+        }
+
+        function applyTheme(theme) {
+            if (theme === "light") {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f4f4f6');
+                document.getElementById('theme-toggle').checked = true;
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#050505');
+                document.getElementById('theme-toggle').checked = false;
+            }
+        }
+
         function updateAvatarDisplay() {
             const imgEl = document.getElementById('header-avatar-img');
             if (cloudData.avatarUrl) {
@@ -473,7 +518,7 @@
         }
 
         async function loadCloudData(uid) {
-            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.add('hidden');
             const snap = await window.getDoc(window.doc(window.firebaseDb, "users", uid));
             
             if (snap.exists()) {
@@ -483,9 +528,12 @@
                 if(typeof cloudData.xp === 'undefined') cloudData.xp = 0;
                 if(!cloudData.avatarUrl) cloudData.avatarUrl = "";
                 if(!cloudData.completedWorkouts) cloudData.completedWorkouts = [];
+                if(!cloudData.theme) cloudData.theme = "dark";
             } else { 
-                cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [] }; 
+                cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [], theme: "dark" }; 
             }
+
+            applyTheme(cloudData.theme);
 
             if (!cloudData.goal) {
                 document.getElementById('app-screen').classList.add('hidden');
@@ -775,7 +823,6 @@
             } else {
                 cloudData.xp = (cloudData.xp || 0) + 50;
                 
-                // Зберігаємо дату завершеного тренування для календаря активності
                 if(!cloudData.completedWorkouts) cloudData.completedWorkouts = [];
                 const nowStr = new Date().toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 cloudData.completedWorkouts.unshift({ date: nowStr, title: day.dayName });
@@ -818,7 +865,6 @@
             sel.innerHTML = analyticsDataStore.length === 0 ? '<option>Немає даних</option>' : analyticsDataStore.map((item, i) => `<option value="${i}">${item.name}</option>`).join('');
             updateChart();
 
-            // Рендер історії завершених тренувань (Календар активності)
             const historyContainer = document.getElementById('completed-workouts-history');
             const workouts = cloudData.completedWorkouts || [];
             if (workouts.length === 0) {
@@ -838,7 +884,7 @@
             if(!data) return;
             const ctx = document.getElementById('progressChart').getContext('2d');
             if (myChart) myChart.destroy();
-            myChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Макс. вага (кг)', data: data.weights, borderColor: '#f1f5f9', backgroundColor: 'rgba(241, 245, 249, 0.08)', borderWidth: 2, fill: true }] }, options: { scales: { y: { ticks: { color: '#8e8e93' } }, x: { ticks: { color: '#8e8e93' } } }, plugins: { legend: { labels: { color: '#f1f5f9' } } } } });
+            myChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Макс. вага (кг)', data: data.weights, borderColor: 'var(--text-color)', backgroundColor: 'rgba(128, 128, 128, 0.08)', borderWidth: 2, fill: true }] }, options: { scales: { y: { ticks: { color: 'var(--text-muted)' } }, x: { ticks: { color: 'var(--text-muted)' } } }, plugins: { legend: { labels: { color: 'var(--text-color)' } } } } });
         }
 
         function generateScheduleLogic() {
@@ -923,14 +969,5 @@
             return { ...ex, sets: sets, reps: reps, suggestedWeights: sw };
         }
     </script>
-    <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('Service Worker зареєстровано!', reg))
-                .catch(err => console.log('Помилка реєстрації Service Worker:', err));
-        });
-    }
-</script>
 </body>
 </html>
