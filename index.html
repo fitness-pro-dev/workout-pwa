@@ -3,15 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Workout PRO</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Тренувальний Спліт</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
+    <!-- Підключення маніфесту для встановлення як додаток -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.png">
     
-    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -20,528 +25,912 @@
             projectId: "dominikavoyto",
             storageBucket: "dominikavoyto.firebasestorage.app",
             messagingSenderId: "104108514397",
-            appId: "1:104108514397:web:63b1c204ba8c40304a41b4",
-            measurementId: "G-61XDF70Q8S"
+            appId: "1:104108514397:web:63b1c204ba8c40304a41b4"
         };
 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        window.firebaseAuth = auth;
-        window.firebaseDb = db;
+        window.firebaseAuth = getAuth(app);
+        window.firebaseDb = getFirestore(app);
+        
         window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
         window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.sendPasswordResetEmail = sendPasswordResetEmail;
         window.signOut = signOut;
+        window.updateProfile = updateProfile;
         window.doc = doc;
         window.setDoc = setDoc;
         window.getDoc = getDoc;
 
-        onAuthStateChanged(auth, async (user) => {
-            const authScreen = document.getElementById('auth-screen');
-            const appScreen = document.getElementById('app-screen');
+        onAuthStateChanged(window.firebaseAuth, async (user) => {
+            document.getElementById('loading-screen').classList.add('hidden');
             if (user) {
-                authScreen.classList.add('hidden');
-                appScreen.classList.remove('hidden');
-                document.getElementById('user-email-display').innerText = user.email;
+                document.getElementById('user-email-display').innerText = user.displayName || user.email.split('@')[0];
                 await loadCloudData(user.uid);
             } else {
-                authScreen.classList.remove('hidden');
-                appScreen.classList.add('hidden');
+                document.getElementById('auth-screen').classList.remove('hidden');
+                document.getElementById('app-screen').classList.add('hidden');
+                document.getElementById('goal-screen').classList.add('hidden');
             }
         });
     </script>
 </head>
-<body data-theme="dark">
+<body>
 
-    <!-- ЕКРАН АВТОРИЗАЦІЇ (Показується першим, якщо користувач не увійшов) -->
-    <div id="auth-screen" class="auth-wrapper">
-        <div class="auth-card">
-            <div class="auth-logo">WORKOUT PRO</div>
-            <p class="auth-subtitle">Увійди в акаунт або створи новий</p>
-            
-            <div class="input-group">
-                <input type="email" id="auth-email" class="prog-input" placeholder="Email пошта">
+    <!-- Модальне вікно -->
+    <div id="custom-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h3 id="modal-title" class="modal-title">Увага</h3>
+            <p id="modal-msg" class="modal-msg"></p>
+            <div class="modal-actions">
+                <button id="modal-btn-cancel" class="btn btn-outline hidden" style="margin-top:0;">Скасувати</button>
+                <button id="modal-btn-confirm" class="btn" style="margin-top:0;">Зрозуміло</button>
             </div>
-            <div class="input-group">
-                <input type="password" id="auth-password" class="prog-input" placeholder="Пароль (мін. 6 символів)">
-            </div>
-            
-            <div class="auth-btn-group">
-                <button class="primary-btn" onclick="handleLogin()">Увійти</button>
-                <button class="outline-btn" onclick="handleRegister()">Створити акаунт</button>
-            </div>
-            <div id="auth-error" class="auth-error"></div>
         </div>
     </div>
 
-    <!-- ОСНОВНИЙ ДОДАТОК (З'являється тільки після входу) -->
+    <!-- Екран завантаження -->
+    <div id="loading-screen" class="app-container" style="display: flex; align-items: center; height: 100vh;">
+        <h2 style="width: 100%; text-align: center; color: var(--text-muted);">Завантаження...</h2>
+    </div>
+
+    <!-- ЕКРАН АВТОРИЗАЦІЇ -->
+    <div id="auth-screen" class="app-container hidden">
+        <h1 class="app-title" style="margin-top: 20px;">Тренувальний Спліт</h1>
+        
+        <div class="card" id="login-form">
+            <h2 class="card-title">Вхід в акаунт</h2>
+            <div class="input-group"><input type="email" id="login-email" class="input" placeholder="Електронна пошта"></div>
+            <div class="input-group">
+                <div class="password-wrapper">
+                    <input type="password" id="login-password" class="input" placeholder="Пароль">
+                    <button type="button" class="eye-btn" onclick="togglePassword('login-password', this)">
+                        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <button class="btn" onclick="login()">Увійти</button>
+            <button class="btn-text" onclick="toggleAuthMode()">Реєстрація нового акаунта</button>
+            <button class="btn-text" style="margin-top: 0;" onclick="resetPassword()">Забули пароль?</button>
+            <div id="login-error" class="error-msg"></div>
+        </div>
+
+        <div class="card hidden" id="register-form">
+            <h2 class="card-title">Створення акаунта</h2>
+            <div class="input-group"><input type="text" id="reg-name" class="input" placeholder="Логін (Нікнейм)"></div>
+            <div class="input-group"><input type="email" id="reg-email" class="input" placeholder="Електронна пошта"></div>
+            <div class="input-group">
+                <div class="password-wrapper">
+                    <input type="password" id="reg-password" class="input" placeholder="Пароль">
+                    <button type="button" class="eye-btn" onclick="togglePassword('reg-password', this)">
+                        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="input-group">
+                <div class="password-wrapper">
+                    <input type="password" id="reg-password-confirm" class="input" placeholder="Підтвердити пароль">
+                    <button type="button" class="eye-btn" onclick="togglePassword('reg-password-confirm', this)">
+                        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <button class="btn" onclick="register()">Зареєструватися</button>
+            <button class="btn-text" onclick="toggleAuthMode()">Вже є акаунт? Увійти</button>
+            <div id="reg-error" class="error-msg"></div>
+        </div>
+    </div>
+
+    <!-- ЕКРАН ВИБОРУ ЦІЛІ -->
+    <div id="goal-screen" class="app-container hidden">
+        <h1 class="app-title" style="margin-top: 20px;">Ваша мета</h1>
+        <div class="card">
+            <p class="text-center text-muted" style="margin-bottom: 24px; font-size: 14px; line-height: 1.5;">Оберіть ціль, щоб програма налаштувала кількість підходів та повторень.</p>
+            
+            <div class="plan-card" onclick="setUserGoal('lose_weight')">
+                <div class="plan-card-content">
+                    <h3 style="font-size: 16px; margin-bottom: 6px;">Схуднення</h3>
+                    <p class="text-muted" style="font-size: 13px;">Більше повторень, інтенсивне спалювання калорій</p>
+                </div>
+            </div>
+            
+            <div class="plan-card" onclick="setUserGoal('build_muscle')">
+                <div class="plan-card-content">
+                    <h3 style="font-size: 16px; margin-bottom: 6px;">Підкачатись та підтягнутись</h3>
+                    <p class="text-muted" style="font-size: 13px;">Більше підходів, менше повторень для рельєфу</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ОСНОВНИЙ ДОДАТОК -->
     <div id="app-screen" class="app-container hidden">
-        <header class="header">
-            <div class="header-user">
-                <span id="user-email-display" class="user-email">користувач</span>
-                <span id="week-info" class="status-badge">Завантаження...</span>
+        
+        <div id="main-header">
+            <h1 class="app-title" style="margin-top: 10px;">Тренувальний Спліт</h1>
+            <div class="profile-avatar-container">
+                <img id="header-avatar-img" class="profile-avatar" src="" onerror="this.style.display='none'" alt="">
+                <div class="user-info" id="user-email-display" style="margin-bottom: 0;">Користувач</div>
             </div>
-            <div class="top-bar-btns">
-                <button class="icon-btn" onclick="toggleTheme()" title="Тема">🌓</button>
-                <button class="icon-btn danger" onclick="handleLogout()" title="Вийти">Вийти</button>
-            </div>
-        </header>
-
-        <!-- Головне меню вибору дій -->
-        <div id="home-dashboard" class="card-panel">
-            <h2 class="section-title">Головне меню</h2>
-            <div class="menu-stack">
-                <button class="primary-btn success" onclick="startActiveWorkout()">🔥 Розпочати тренування</button>
-                <button class="primary-btn" onclick="showGeneratorPanel()">⚙️ Створити план на тиждень</button>
-                <button class="outline-btn" onclick="openBackupModal()">💾 Експорт / Імпорт даних</button>
+            
+            <div class="tabs" id="main-tabs">
+                <div class="tab-slider" id="tab-slider"></div>
+                <div class="tab active" onclick="switchMainTab('plan', 0, this)">План</div>
+                <div class="tab" onclick="switchMainTab('analytics', 1, this)">Аналітика</div>
+                <div class="tab" onclick="switchMainTab('settings', 2, this)">Налаштування</div>
             </div>
         </div>
 
-        <!-- Панель генератора тижня -->
-        <div id="generator-panel" class="card-panel hidden">
-            <h2 class="section-title">Новий тижневий план</h2>
-            <div class="input-group">
-                <label>Днів тренувань на тиждень</label>
-                <input type="number" id="days" value="4" min="1" max="7" class="prog-input">
+        <!-- Вкладка 1: План -->
+        <div id="tab-plan">
+            
+            <!-- Мотивація / Рівень користувача -->
+            <div class="level-badge">
+                <div class="level-info">
+                    <h4 id="user-level-title">Рівень 1: Новичок</h4>
+                    <p id="user-xp-text">Досвід: 0 / 150 XP</p>
+                </div>
+                <div class="level-circle">
+                    <span id="level-num-val" style="font-size: 18px; font-weight:700;">1</span>
+                    <span>LVL</span>
+                </div>
             </div>
-            <div class="input-group">
-                <label>Тривалість заняття (хв)</label>
-                <input type="number" id="minutes" value="90" min="10" max="180" class="prog-input">
+
+            <!-- Дашборд -->
+            <div id="dashboard-view" class="card">
+                <h2 class="card-title">Мої тренування</h2>
+                <div id="plans-list"></div>
+                <div id="empty-state" class="hidden">
+                    <p class="text-center text-muted" style="margin-bottom: 20px;">Створених тренувань ще немає.</p>
+                </div>
+                <button class="btn btn-outline" style="margin-top: 16px;" onclick="showGenerator()">+ Створити нове тренування</button>
             </div>
-            <div class="input-group">
-                <label>Режим преса (Core)</label>
-                <select id="absMode" class="prog-input">
-                    <option value="everyday">В кінці кожного дня</option>
-                    <option value="separate">Окремий день</option>
-                    <option value="none">Не робити</option>
-                </select>
+
+            <!-- Генератор -->
+            <div id="generator-view" class="card hidden">
+                <h2 class="card-title">Створення плану</h2>
+                <div class="input-group">
+                    <label>Оберіть будь-який день тижня</label>
+                    <input type="date" id="week-start-date" class="input">
+                </div>
+                <div class="input-group"><label>Днів на тиждень</label><input type="number" id="days" value="4" min="1" max="7" class="input"></div>
+                <div class="input-group"><label>Час у день (хв)</label><input type="number" id="minutes" value="60" min="20" max="180" class="input"></div>
+                
+                <div class="input-group">
+                    <label>Прес (Core)</label>
+                    <select id="absMode" class="input" onchange="toggleAbsTimeInput()">
+                        <option value="everyday">В кінці кожного дня</option>
+                        <option value="separate">Окремий день</option>
+                        <option value="none">Не робити</option>
+                    </select>
+                </div>
+
+                <div class="input-group" id="abs-time-group">
+                    <label>Час на прес в кінці дня (хв)</label>
+                    <select id="absMinutes" class="input">
+                        <option value="5">5 хвилин</option>
+                        <option value="10" selected>10 хвилин</option>
+                        <option value="15">15 хвилин</option>
+                        <option value="20">20 хвилин</option>
+                    </select>
+                </div>
+
+                <div class="input-group row-align"><label>Тільки Вдома</label><label class="toggle-switch"><input type="checkbox" id="isHome"><span class="slider"></span></label></div>
+                <button class="btn" onclick="generateWeek()">Створити</button>
+                <button class="btn btn-outline" onclick="hideGenerator()">Скасувати</button>
             </div>
-            <div class="input-group">
-                <label>Час на прес (хв)</label>
-                <input type="number" id="absMinutes" value="15" min="5" max="60" class="prog-input">
-            </div>
-            <div class="input-group row-align">
-                <label>Тільки "Вдома" (без тренажерів)</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="isHome">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="menu-stack" style="margin-top: 16px;">
-                <button class="primary-btn" onclick="generateAndSaveWeek()">Зберегти план</button>
-                <button class="outline-btn" onclick="hideGeneratorPanel()">Назад</button>
+
+            <!-- Огляд плану -->
+            <div id="day-overview-view" class="card hidden">
+                <h2 class="card-title" id="overview-plan-title">План</h2>
+                
+                <div class="view-tabs">
+                    <button class="view-tab active" id="btn-view-day" onclick="setOverviewMode('day')">По днях</button>
+                    <button class="view-tab" id="btn-view-week" onclick="setOverviewMode('week')">Весь тиждень</button>
+                </div>
+
+                <div class="input-group" id="day-selector-container">
+                    <select id="day-selector" class="input" onchange="renderOverviewContent()"></select>
+                </div>
+
+                <button class="btn" style="margin-bottom: 20px;" onclick="scrollToStart()">Розпочати ↓</button>
+                
+                <div id="overview-exercises-list"></div>
+                
+                <button id="start-workout-btn-bottom" class="btn" style="margin-top: 24px;" onclick="startWorkout()">Розпочати тренування</button>
+                <button class="btn btn-outline" onclick="closeDayOverview()">Назад до списку</button>
             </div>
         </div>
 
-        <div class="tabs-container">
-            <button class="tab-btn active" onclick="switchTab('workout')">Тренування</button>
-            <button class="tab-btn" onclick="switchTab('analytics')">Аналітика</button>
-        </div>
-
-        <!-- Вкладка тренувань -->
-        <div id="tab-workout">
-            <div id="active-workout-container"></div>
-        </div>
-
-        <!-- Вкладка аналітики -->
+        <!-- Вкладка 2: Аналітика -->
         <div id="tab-analytics" class="hidden">
-            <div class="card-panel">
-                <h2 class="section-title">Прогресія робочої ваги</h2>
-                <select id="chart-selector" class="prog-input mb-3" onchange="updateChart()"></select>
-                <canvas id="progressChart" width="400" height="200"></canvas>
+            <div class="card">
+                <h2 class="card-title">Прогрес ваги</h2>
+                <select id="chart-selector" class="input" style="margin-bottom: 20px;" onchange="updateChart()"></select>
+                <canvas id="progressChart" width="400" height="250"></canvas>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Календар активності</h2>
+                <p class="text-muted text-center" style="font-size: 13px; margin-bottom: 12px;">Дати повністю завершених тренувань</p>
+                <div id="completed-workouts-history" class="activity-list"></div>
             </div>
         </div>
-    </div>
 
-    <!-- Модалка бекапу -->
-    <div id="backup-modal" class="card-panel hidden modal-box">
-        <h2 class="section-title">Резервна копія</h2>
-        <p class="text-muted text-sm mb-3">Збережи свої дані у файл або завантаж їх.</p>
-        <div class="menu-stack">
-            <button class="primary-btn" onclick="exportDataJSON()">📥 Експорт JSON</button>
-            <input type="file" id="import-file" class="prog-input" onchange="importDataJSON(event)">
-            <button class="outline-btn" onclick="closeBackupModal()">Закрити</button>
+        <!-- Вкладка 3: Налаштування -->
+        <div id="tab-settings" class="hidden">
+            <div class="card">
+                <h2 class="card-title" style="margin-bottom: 20px;">Налаштування</h2>
+                
+                <!-- Розділ 1: Профіль -->
+                <div class="settings-section-card" id="sec-profile">
+                    <div class="settings-section-header" onclick="toggleSettingsSection('sec-profile')">
+                        <span>Профіль та персоналізація</span>
+                        <span class="settings-arrow">▼</span>
+                    </div>
+                    <div class="settings-section-content">
+                        <div class="input-group">
+                            <label>Змінити нікнейм</label>
+                            <input type="text" id="new-nickname" class="input" placeholder="Новий нікнейм">
+                        </div>
+                        <button class="btn" style="margin-bottom: 16px;" onclick="changeNickname()">Зберегти нікнейм</button>
+
+                        <div class="input-group">
+                            <label>Посилання на фото профілю (URL)</label>
+                            <input type="text" id="new-avatar-url" class="input" placeholder="https://example.com/photo.jpg">
+                        </div>
+                        <button class="btn" onclick="changeAvatar()">Зберегти фото</button>
+                    </div>
+                </div>
+
+                <!-- Розділ 2: Цілі та тренування -->
+                <div class="settings-section-card" id="sec-goal">
+                    <div class="settings-section-header" onclick="toggleSettingsSection('sec-goal')">
+                        <span>Напрям та ціль тренувань</span>
+                        <span class="settings-arrow">▼</span>
+                    </div>
+                    <div class="settings-section-content">
+                        <p class="text-muted" style="font-size: 13px; margin-bottom: 14px; line-height: 1.4;">Зміна напряму чи цілі онушить старі плани та відкриє головну сторінку.</p>
+                        <button class="btn btn-outline" onclick="changeGoal()">Змінити ціль / напрям тренувань</button>
+                    </div>
+                </div>
+
+                <!-- Дії з акаунтом -->
+                <div style="margin-top: 28px;">
+                    <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-muted);">Безпека акаунта</h3>
+                    <button class="btn btn-outline" onclick="logout()">Вийти з акаунта</button>
+                    <button class="btn btn-danger" style="margin-top: 12px;" onclick="deleteAccount()">Видалити акаунт назавжди</button>
+                </div>
+
+                <div id="settings-msg" class="error-msg" style="color: var(--text-muted); margin-top: 14px;"></div>
+            </div>
         </div>
-    </div>
 
-    <!-- Плаваючий мінімалістичний таймер відпочинку -->
-    <div id="rest-timer-bar" class="timer-overlay hidden">
-        <span id="timer-display" class="timer-text">01:30</span>
-        <button class="outline-btn" style="padding: 4px 10px; font-size: 12px;" onclick="stopRestTimer()">Пропустити</button>
+        <!-- === ПРОЦЕС ТРЕНУВАННЯ === -->
+        <div id="workout-flow-view" class="hidden">
+            <div id="exercise-step-view" class="exercise-view">
+                <div class="ex-header">
+                    <div class="user-info" id="workout-progress-text">Вправа 1</div>
+                    <h2 class="ex-name" id="ex-name-display">Назва</h2>
+                </div>
+                <p class="ex-desc" id="ex-desc-display">Опис</p>
+                <div id="ex-sets-container"></div>
+                <div style="margin-top: 20px;">
+                    <button class="btn" onclick="completeExercise()">Завершено</button>
+                    <button class="btn-text" onclick="exitWorkout()">Перервати та вийти</button>
+                </div>
+            </div>
+
+            <div id="rest-step-view" class="rest-view hidden">
+                <div class="rest-title">Відпочинок</div>
+                <div class="rest-timer" id="rest-time-display">01:30</div>
+                <button class="btn btn-outline" onclick="finishRestEarly()">Пропустити відпочинок</button>
+            </div>
+        </div>
+
     </div>
 
     <script src="exercises.js"></script>
+    
     <script>
-        let myChart = null;
-        let analyticsDataStore = [];
-        let timerInterval = null;
-        let cloudData = { history: {}, weekSchedule: null, currentDayIndex: 0 };
+        let myChart = null, analyticsDataStore = [];
+        let cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [] };
+        let currentPlanId = null; 
+        let currentOverviewMode = 'day';
+        let activeExIdx = 0, restTime = 0, restInterval = null;
 
-        async function handleRegister() {
-            const email = document.getElementById('auth-email').value;
-            const pass = document.getElementById('auth-password').value;
-            try {
-                await window.createUserWithEmailAndPassword(window.firebaseAuth, email, pass);
-            } catch (err) {
-                document.getElementById('auth-error').innerText = err.message;
+        const dateInput = document.getElementById('week-start-date');
+        const todayString = new Date().toISOString().split('T')[0];
+        dateInput.value = todayString;
+        dateInput.min = todayString; 
+
+        window.toggleSettingsSection = function(sectionId) {
+            const sec = document.getElementById(sectionId);
+            sec.classList.toggle('open');
+        }
+
+        window.toggleAbsTimeInput = function() {
+            const mode = document.getElementById('absMode').value;
+            const absTimeGroup = document.getElementById('abs-time-group');
+            absTimeGroup.style.display = (mode === 'everyday') ? 'block' : 'none';
+        }
+
+        window.showAppAlert = function(msg) {
+            document.getElementById('modal-title').innerText = "Увага";
+            document.getElementById('modal-msg').innerText = msg;
+            const overlay = document.getElementById('custom-modal');
+            const btnCancel = document.getElementById('modal-btn-cancel');
+            const btnConfirm = document.getElementById('modal-btn-confirm');
+            
+            btnCancel.classList.add('hidden');
+            btnConfirm.onclick = () => overlay.classList.add('hidden');
+            overlay.classList.remove('hidden');
+        }
+
+        window.showAppConfirm = function(msg, onConfirm) {
+            document.getElementById('modal-title').innerText = "Підтвердження";
+            document.getElementById('modal-msg').innerText = msg;
+            const overlay = document.getElementById('custom-modal');
+            const btnCancel = document.getElementById('modal-btn-cancel');
+            const btnConfirm = document.getElementById('modal-btn-confirm');
+            
+            btnCancel.classList.remove('hidden');
+            btnConfirm.onclick = () => { overlay.classList.add('hidden'); if(onConfirm) onConfirm(); };
+            btnCancel.onclick = () => overlay.classList.add('hidden');
+            overlay.classList.remove('hidden');
+        }
+
+        window.togglePassword = function(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === "password") {
+                input.type = "text";
+                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+            } else {
+                input.type = "password";
+                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
             }
         }
 
-        async function handleLogin() {
-            const email = document.getElementById('auth-email').value;
-            const pass = document.getElementById('auth-password').value;
-            try {
-                await window.signInWithEmailAndPassword(window.firebaseAuth, email, pass);
-            } catch (err) {
-                document.getElementById('auth-error').innerText = err.message;
-            }
+        window.switchMainTab = function(tabName, index, el) {
+            ['plan', 'analytics', 'settings'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('tab-slider').style.transform = `translateX(${index * 100}%)`;
+            if (tabName === 'analytics') loadAnalytics();
         }
 
-        async function handleLogout() {
-            await window.signOut(window.firebaseAuth);
+        window.toggleAuthMode = function() {
+            document.getElementById('login-form').classList.toggle('hidden');
+            document.getElementById('register-form').classList.toggle('hidden');
+            document.getElementById('login-error').innerText = '';
+            document.getElementById('reg-error').innerText = '';
+        }
+
+        window.register = async function() {
+            const name = document.getElementById('reg-name').value;
+            const email = document.getElementById('reg-email').value;
+            const pass = document.getElementById('reg-password').value;
+            if (pass !== document.getElementById('reg-password-confirm').value) return document.getElementById('reg-error').innerText = "Паролі не співпадають";
+            if (!name) return document.getElementById('reg-error').innerText = "Введіть логін";
+
+            try {
+                const userCred = await window.createUserWithEmailAndPassword(window.firebaseAuth, email, pass);
+                await window.updateProfile(userCred.user, { displayName: name });
+            } catch (err) { document.getElementById('reg-error').innerText = "Помилка: " + err.message; }
+        }
+
+        window.login = async function() {
+            try { await window.signInWithEmailAndPassword(window.firebaseAuth, document.getElementById('login-email').value, document.getElementById('login-password').value); } 
+            catch (err) { document.getElementById('login-error').innerText = "Невірна пошта або пароль."; }
+        }
+
+        window.resetPassword = async function() {
+            const email = document.getElementById('login-email').value;
+            if(!email) return document.getElementById('login-error').innerText = "Введіть пошту в поле вище для скидання.";
+            try {
+                await window.sendPasswordResetEmail(window.firebaseAuth, email);
+                document.getElementById('login-error').style.color = "var(--text-muted)";
+                document.getElementById('login-error').innerText = "Лист надіслано! Перевірте папку Спам.";
+            } catch (err) { document.getElementById('login-error').innerText = "Помилка. Перевірте правильність пошти."; }
+        }
+
+        window.logout = async function() { await window.signOut(window.firebaseAuth); }
+        window.deleteAccount = async function() {
+            showAppConfirm("Ви впевнені, що хочете видалити акаунт назавжди? Всі дані будуть знищені.", async () => {
+                try { await window.firebaseAuth.currentUser.delete(); } 
+                catch(e) { showAppAlert("З міркувань безпеки, будь ласка, вийдіть з акаунта, увійдіть знову і повторіть спробу."); }
+            });
+        }
+        window.changeNickname = async function() {
+            const newName = document.getElementById('new-nickname').value;
+            if(!newName) return;
+            try {
+                await window.updateProfile(window.firebaseAuth.currentUser, { displayName: newName });
+                document.getElementById('user-email-display').innerText = newName;
+                document.getElementById('settings-msg').innerText = "Нікнейм змінено!";
+                setTimeout(() => document.getElementById('settings-msg').innerText = "", 3000);
+            } catch (e) { document.getElementById('settings-msg').innerText = "Помилка зміни нікнейму."; }
+        }
+
+        window.changeAvatar = async function() {
+            const url = document.getElementById('new-avatar-url').value;
+            if(!url) return;
+            cloudData.avatarUrl = url;
+            await saveCloudData();
+            updateAvatarDisplay();
+            document.getElementById('settings-msg').innerText = "Фото профілю оновлено!";
+            setTimeout(() => document.getElementById('settings-msg').innerText = "", 3000);
+        }
+
+        function updateAvatarDisplay() {
+            const imgEl = document.getElementById('header-avatar-img');
+            if (cloudData.avatarUrl) {
+                imgEl.src = cloudData.avatarUrl;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
         }
 
         async function loadCloudData(uid) {
-            try {
-                const docRef = window.doc(window.firebaseDb, "users", uid);
-                const docSnap = await window.getDoc(docRef);
-                if (docSnap.exists()) {
-                    cloudData = docSnap.data();
-                    if(cloudData.currentDayIndex === undefined) cloudData.currentDayIndex = 0;
-                } else {
-                    cloudData = { history: {}, weekSchedule: null, currentDayIndex: 0 };
-                }
-                initAppAfterLoad();
-            } catch (err) {
-                console.error("Помилка завантаження хмари:", err);
+            document.getElementById('auth-screen').classList.add('hidden');
+            const snap = await window.getDoc(window.doc(window.firebaseDb, "users", uid));
+            
+            if (snap.exists()) {
+                cloudData = snap.data();
+                if(!cloudData.schedules) cloudData.schedules = [];
+                if(!cloudData.history) cloudData.history = {};
+                if(typeof cloudData.xp === 'undefined') cloudData.xp = 0;
+                if(!cloudData.avatarUrl) cloudData.avatarUrl = "";
+                if(!cloudData.completedWorkouts) cloudData.completedWorkouts = [];
+            } else { 
+                cloudData = { history: {}, schedules: [], goal: null, xp: 0, avatarUrl: "", completedWorkouts: [] }; 
             }
+
+            if (!cloudData.goal) {
+                document.getElementById('app-screen').classList.add('hidden');
+                document.getElementById('goal-screen').classList.remove('hidden');
+            } else {
+                document.getElementById('goal-screen').classList.add('hidden');
+                document.getElementById('app-screen').classList.remove('hidden');
+                updateDashboardState();
+                updateLevelDisplay();
+                updateAvatarDisplay();
+            }
+        }
+
+        window.setUserGoal = function(goalType) {
+            cloudData.goal = goalType;
+            cloudData.schedules = [];
+            cloudData.history = {};
+            cloudData.completedWorkouts = [];
+            saveCloudData();
+            document.getElementById('goal-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            switchMainTab('plan', 0, document.querySelectorAll('.tab')[0]);
+            updateDashboardState();
+            updateLevelDisplay();
+            updateAvatarDisplay();
+        }
+
+        window.changeGoal = function() {
+            showAppConfirm("Зміна цілі онушить ваші поточні плани та історію аналітики. Після зміни ви будете перенаправлені на головну сторінку.", () => {
+                cloudData.goal = null;
+                cloudData.schedules = [];
+                cloudData.history = {};
+                cloudData.completedWorkouts = [];
+                saveCloudData();
+                document.getElementById('app-screen').classList.add('hidden');
+                document.getElementById('goal-screen').classList.remove('hidden');
+            });
         }
 
         async function saveCloudData() {
             const user = window.firebaseAuth.currentUser;
-            if (!user) return;
-            try {
-                const docRef = window.doc(window.firebaseDb, "users", user.uid);
-                await window.setDoc(docRef, cloudData);
-            } catch (err) {
-                console.error("Помилка збереження хмари:", err);
-            }
+            if (user) await window.setDoc(window.doc(window.firebaseDb, "users", user.uid), cloudData);
         }
 
-        function initAppAfterLoad() {
-            if (cloudData.weekSchedule && cloudData.weekSchedule.length > 0) {
-                document.getElementById('week-info').innerText = `План активний (День ${cloudData.currentDayIndex + 1} з ${cloudData.weekSchedule.length})`;
-                document.getElementById('home-dashboard').classList.remove('hidden');
+        function updateLevelDisplay() {
+            const xp = cloudData.xp || 0;
+            const level = Math.floor(xp / 150) + 1;
+            const currentLevelXp = xp % 150;
+            const titles = ["Новичок", "Любитель", "Спортсмен", "Атлет", "Професіонал", "Титан"];
+            const title = titles[Math.min(level - 1, titles.length - 1)];
+
+            document.getElementById('level-num-val').innerText = level;
+            document.getElementById('user-level-title').innerText = `Рівень ${level}: ${title}`;
+            document.getElementById('user-xp-text').innerText = `Досвід: ${currentLevelXp} / 150 XP`;
+        }
+
+        window.deletePlan = function(event, planId) {
+            event.stopPropagation();
+            showAppConfirm("Ви впевнені, що хочете видалити це тренування?", () => {
+                cloudData.schedules = cloudData.schedules.filter(p => p.id !== planId);
+                saveCloudData();
+                updateDashboardState();
+            });
+        }
+
+        function getWeekRange() {
+            const selectedDate = document.getElementById('week-start-date').valueAsDate || new Date();
+            const first = selectedDate.getDate() - selectedDate.getDay() + (selectedDate.getDay() === 0 ? -6 : 1);
+            const firstDay = new Date(selectedDate.setDate(first));
+            const lastDay = new Date(selectedDate.setDate(first + 6));
+            const fmt = (d) => d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+            return `з ${fmt(firstDay)} по ${fmt(lastDay)}`;
+        }
+
+        function updateDashboardState() {
+            const container = document.getElementById('plans-list');
+            container.innerHTML = '';
+            
+            if (cloudData.schedules && cloudData.schedules.length > 0) {
+                document.getElementById('empty-state').classList.add('hidden');
+                
+                cloudData.schedules.forEach(plan => {
+                    const nextDay = plan.days[plan.currentDayIndex] ? plan.days[plan.currentDayIndex].dayName : "Завершено";
+                    container.innerHTML += `
+                        <div class="plan-card">
+                            <div class="plan-card-content" onclick="openPlanOverview('${plan.id}')">
+                                <h3 style="font-size: 16px; margin-bottom: 8px;">Тиждень (${plan.weekRangeStr})</h3>
+                                <p class="text-muted" style="font-size: 13px;">Наступне: ${nextDay}</p>
+                            </div>
+                            <button class="plan-delete-btn" onclick="deletePlan(event, '${plan.id}')" title="Видалити">✕</button>
+                        </div>
+                    `;
+                });
             } else {
-                document.getElementById('week-info').innerText = "План не створено";
-                showGeneratorPanel();
+                document.getElementById('empty-state').classList.remove('hidden');
             }
         }
 
-        function showGeneratorPanel() {
-            document.getElementById('generator-panel').classList.remove('hidden');
-            document.getElementById('home-dashboard').classList.add('hidden');
-        }
-        function hideGeneratorPanel() {
-            document.getElementById('generator-panel').classList.add('hidden');
-            if (cloudData.weekSchedule) document.getElementById('home-dashboard').classList.remove('hidden');
-        }
+        window.showGenerator = function() { document.getElementById('dashboard-view').classList.add('hidden'); document.getElementById('generator-view').classList.remove('hidden'); }
+        window.hideGenerator = function() { document.getElementById('generator-view').classList.add('hidden'); document.getElementById('dashboard-view').classList.remove('hidden'); }
 
-        function generateAndSaveWeek() {
-            cloudData.weekSchedule = generateScheduleLogic();
-            cloudData.currentDayIndex = 0; // скидаємо на перший день
-            saveCloudData();
-            document.getElementById('week-info').innerText = `План активний (День 1 з ${cloudData.weekSchedule.length})`;
-            hideGeneratorPanel();
-            document.getElementById('home-dashboard').classList.remove('hidden');
-            showToast("✨ План успішно створено!");
-        }
-
-        // Послідовне стартування тренування (День 1, потім День 2 і т.д.)
-        function startActiveWorkout() {
-            if (!cloudData.weekSchedule || cloudData.weekSchedule.length === 0) {
-                showGeneratorPanel();
+        window.generateWeek = function() {
+            const selectedDateStr = document.getElementById('week-start-date').value;
+            const selectedDate = new Date(selectedDateStr);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            if (selectedDate < today) {
+                showAppAlert("Ця дата вже минула. Будь ласка, оберіть поточну або майбутню дату.");
                 return;
             }
-            document.getElementById('home-dashboard').classList.add('hidden');
-            renderActiveDayWorkout(cloudData.currentDayIndex);
-        }
 
-        function renderActiveDayWorkout(dayIdx) {
-            const container = document.getElementById('active-workout-container');
-            const day = cloudData.weekSchedule[dayIdx];
-            if (!day) return;
-
-            let exercisesHtml = day.exercises.map((ex, eIdx) => renderExerciseHtml(ex, `${dayIdx}_${eIdx}`)).join('');
+            const weekRange = getWeekRange();
+            if (cloudData.schedules.some(s => s.weekRangeStr === weekRange)) {
+                showAppAlert("Тренування на цей тиждень вже існує!");
+                return;
+            }
             
-            container.innerHTML = `
-                <div class="card-panel">
-                    <div class="day-header-flex">
-                        <h2>${day.dayName}</h2>
-                        <span class="text-sm text-muted">~${day.totalTime} хв</span>
-                    </div>
-                    <div class="exercise-list">${exercisesHtml}</div>
-                    <div style="margin-top: 20px;">
-                        <button class="primary-btn success" onclick="finishWorkout(${dayIdx})">💾 Завершити і зберегти тренування</button>
-                    </div>
-                </div>`;
+            const newPlan = { id: Date.now().toString(), weekRangeStr: weekRange, currentDayIndex: 0, days: generateScheduleLogic() };
+            cloudData.schedules.push(newPlan);
+            saveCloudData();
+            updateDashboardState();
+            hideGenerator();
         }
 
-        function finishWorkout(dayIdx) {
-            // Переходимо до наступного дня циклічно
-            cloudData.currentDayIndex = (dayIdx + 1) % cloudData.weekSchedule.length;
+        window.openPlanOverview = function(planId) {
+            currentPlanId = planId;
+            document.getElementById('dashboard-view').classList.add('hidden');
+            document.getElementById('day-overview-view').classList.remove('hidden');
+            
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            document.getElementById('overview-plan-title').innerText = `Тиждень ${plan.weekRangeStr}`;
+            
+            const sel = document.getElementById('day-selector');
+            sel.innerHTML = '';
+            plan.days.forEach((d, i) => sel.innerHTML += `<option value="${i}">${d.dayName}</option>`);
+            sel.value = plan.currentDayIndex;
+            setOverviewMode('day');
+        }
+        
+        window.closeDayOverview = function() {
+            document.getElementById('day-overview-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+        }
+
+        window.setOverviewMode = function(mode) {
+            currentOverviewMode = mode;
+            document.getElementById('btn-view-day').classList.toggle('active', mode === 'day');
+            document.getElementById('btn-view-week').classList.toggle('active', mode === 'week');
+            document.getElementById('day-selector-container').style.display = (mode === 'day') ? 'block' : 'none';
+            renderOverviewContent();
+        }
+
+        window.renderOverviewContent = function() {
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            const container = document.getElementById('overview-exercises-list');
+            container.innerHTML = '';
+
+            if (currentOverviewMode === 'day') {
+                renderDayBlock(plan.days[document.getElementById('day-selector').value], document.getElementById('day-selector').value, container);
+            } else {
+                plan.days.forEach((day, dIdx) => renderDayBlock(day, dIdx, container));
+            }
+        }
+
+        function renderDayBlock(day, dayIdx, container) {
+            let html = `<h3 style="margin: 20px 0 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">${day.dayName}</h3>`;
+            day.exercises.forEach((ex, exIdx) => {
+                const isCardio = (ex.category === "Warmup" || ex.category === "Cooldown");
+                
+                html += `
+                    <div class="ex-preview-item">
+                        <div class="ex-preview-header">
+                            <span class="ex-preview-name">${ex.name}</span>
+                            <span class="ex-preview-stats">${isCardio ? '1 підхід' : ex.sets + 'x' + ex.reps}</span>
+                        </div>
+                        <div id="desc-${dayIdx}-${exIdx}" class="ex-desc hidden" style="margin: 8px 0; padding: 12px;">${ex.description}</div>
+                        <div class="ex-preview-actions">
+                            <button class="action-btn" onclick="document.getElementById('desc-${dayIdx}-${exIdx}').classList.toggle('hidden')">
+                                <span class="icon-circle">i</span> Розгорнути
+                            </button>
+                            ${!isCardio ? `<button class="action-btn" onclick="swapOverviewExercise(${dayIdx}, ${exIdx}, '${ex.category}')">
+                                <span class="icon-refresh">⟳</span> Змінити
+                            </button>` : ''}
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML += html;
+        }
+
+        window.swapOverviewExercise = function(dayIdx, exIdx, category) {
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            const day = plan.days[dayIdx];
+            const currentIds = day.exercises.map(e => e.id);
+            const isHome = document.getElementById('isHome').checked;
+            
+            let validEx = exercisesList.filter(e => e.category === category && !currentIds.includes(e.id));
+            if (isHome) validEx = validEx.filter(e => e.equipment !== "Machine" && !["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок"].some(w => e.name.toLowerCase().includes(w)));
+            
+            if (validEx.length > 0) {
+                const replacement = validEx[Math.floor(Math.random() * validEx.length)];
+                day.exercises[exIdx] = mapEx(replacement);
+                saveCloudData();
+                renderOverviewContent();
+            } else { showAppAlert("Немає доступних замін для цієї категорії."); }
+        }
+
+        window.scrollToStart = function() { document.getElementById('start-workout-btn-bottom').scrollIntoView({ behavior: 'smooth' }); }
+
+        window.startWorkout = function() {
+            document.getElementById('day-overview-view').classList.add('hidden');
+            document.getElementById('main-header').classList.add('hidden');
+            document.getElementById('tab-plan').classList.add('hidden');
+            document.getElementById('workout-flow-view').classList.remove('hidden');
+            activeExIdx = 0;
+            
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            if (currentOverviewMode === 'day') { plan.currentDayIndex = parseInt(document.getElementById('day-selector').value); }
+            renderCurrentExercise();
+        }
+
+        window.exitWorkout = function() {
+            document.getElementById('workout-flow-view').classList.add('hidden');
+            document.getElementById('main-header').classList.remove('hidden');
+            document.getElementById('tab-plan').classList.remove('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+        }
+
+        function renderCurrentExercise() {
+            document.getElementById('exercise-step-view').classList.remove('hidden');
+            document.getElementById('rest-step-view').classList.add('hidden');
+
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            const day = plan.days[plan.currentDayIndex];
+            const ex = day.exercises[activeExIdx];
+            const isCardio = (ex.category === "Warmup" || ex.category === "Cooldown");
+
+            document.getElementById('workout-progress-text').innerText = `${day.dayName} • Вправа ${activeExIdx + 1} з ${day.exercises.length}`;
+            document.getElementById('ex-name-display').innerText = ex.name;
+            document.getElementById('ex-desc-display').innerText = ex.description;
+
+            const container = document.getElementById('ex-sets-container');
+            container.innerHTML = '';
+
+            if (isCardio) {
+                container.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted);">Виконайте вправу та натисніть Завершено</div>`;
+            } else {
+                for (let i = 0; i < ex.sets; i++) {
+                    let w = (ex.suggestedWeights && ex.suggestedWeights[i]) ? ex.suggestedWeights[i] : '';
+                    container.innerHTML += `
+                        <div class="set-row">
+                            <span style="font-weight:500;">Підхід ${i+1} <span style="color:var(--text-muted); font-size:13px; margin-left:4px;">× ${ex.reps}</span></span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="number" class="weight-input" value="${w > 0 ? w : ''}" placeholder="0" oninput="autoSaveWeight(this, '${ex.id}', ${i})">
+                                <span style="font-size:14px; color:var(--text-muted);">кг</span>
+                            </div>
+                        </div>`;
+                }
+            }
+        }
+
+        window.autoSaveWeight = function(input, exId, setIndex) {
+            const val = parseFloat(input.value) || 0;
+            const today = new Date().toLocaleDateString('uk-UA');
+            if (!cloudData.history[exId]) cloudData.history[exId] = { sets: 4, setWeights: [], historyDates: [], historyWeights: [], count: 0 };
+            cloudData.history[exId].setWeights[setIndex] = val;
+            if (val > 0) {
+                cloudData.history[exId].historyDates.push(today);
+                cloudData.history[exId].historyWeights.push(val);
+                cloudData.history[exId].count = (cloudData.history[exId].count || 0) + 1;
+            }
             saveCloudData();
-            document.getElementById('week-info').innerText = `План активний (Наступний: День ${cloudData.currentDayIndex + 1})`;
-            document.getElementById('active-workout-container').innerHTML = '';
-            document.getElementById('home-dashboard').classList.remove('hidden');
-            showToast("🎉 Тренування збережено! Молодець!");
+        }
+
+        window.completeExercise = function() {
+            const plan = cloudData.schedules.find(s => s.id === currentPlanId);
+            const day = plan.days[plan.currentDayIndex];
+            const ex = day.exercises[activeExIdx];
+            if (activeExIdx < day.exercises.length - 1) {
+                if (ex.category === "Warmup" || ex.category === "Cooldown") {
+                    activeExIdx++; renderCurrentExercise();
+                } else {
+                    document.getElementById('exercise-step-view').classList.add('hidden');
+                    document.getElementById('rest-step-view').classList.remove('hidden');
+                    startRestTimer();
+                }
+            } else {
+                cloudData.xp = (cloudData.xp || 0) + 50;
+                
+                // Зберігаємо дату завершеного тренування для календаря активності
+                if(!cloudData.completedWorkouts) cloudData.completedWorkouts = [];
+                const nowStr = new Date().toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                cloudData.completedWorkouts.unshift({ date: nowStr, title: day.dayName });
+
+                plan.currentDayIndex = (plan.currentDayIndex + 1) % plan.days.length;
+                saveCloudData(); 
+                updateDashboardState(); 
+                updateLevelDisplay();
+                exitWorkout();
+                showAppAlert("Вітаємо! Тренування завершено! Ви отримали +50 XP.");
+            }
+        }
+
+        function startRestTimer() {
+            clearInterval(restInterval);
+            restTime = 90; updateRestDisplay();
+            restInterval = setInterval(() => {
+                restTime--; updateRestDisplay();
+                if (restTime <= 0) { finishRestEarly(); if(navigator.vibrate) navigator.vibrate([200, 100, 200]); }
+            }, 1000);
+        }
+        function updateRestDisplay() { document.getElementById('rest-time-display').innerText = `${Math.floor(restTime / 60).toString().padStart(2, '0')}:${(restTime % 60).toString().padStart(2, '0')}`; }
+        window.finishRestEarly = function() { clearInterval(restInterval); activeExIdx++; renderCurrentExercise(); }
+
+        function loadAnalytics() {
+            const hist = cloudData.history;
+            const legacyNames = { "db_row": "Тяга гантелі", "pullups": "Підтягування", "pushups": "Віджимання", "squats": "Присідання", "bench_press": "Жим лежачи", "deadlift": "Станова тяга" };
+            analyticsDataStore = Object.keys(hist).filter(k => hist[k].historyWeights && hist[k].historyWeights.length > 0).map(k => {
+                let name = "";
+                let ex = exercisesList.find(e => e.id === k);
+                if (ex) { name = ex.name; } else {
+                    let lowerK = k.toLowerCase();
+                    if (legacyNames[lowerK]) { name = legacyNames[lowerK]; } else {
+                        name = k.replace(/_/g, ' '); name = name.charAt(0).toUpperCase() + name.slice(1);
+                    }
+                }
+                return { name: name, dates: hist[k].historyDates, weights: hist[k].historyWeights };
+            });
+            const sel = document.getElementById('chart-selector');
+            sel.innerHTML = analyticsDataStore.length === 0 ? '<option>Немає даних</option>' : analyticsDataStore.map((item, i) => `<option value="${i}">${item.name}</option>`).join('');
+            updateChart();
+
+            // Рендер історії завершених тренувань (Календар активності)
+            const historyContainer = document.getElementById('completed-workouts-history');
+            const workouts = cloudData.completedWorkouts || [];
+            if (workouts.length === 0) {
+                historyContainer.innerHTML = `<p class="text-muted text-center" style="font-size: 13px; padding: 10px 0;">Ще немає завершених тренувань</p>`;
+            } else {
+                historyContainer.innerHTML = workouts.map(item => `
+                    <div class="activity-item">
+                        <span class="activity-date">${item.date} — ${item.title}</span>
+                        <span class="activity-badge">+50 XP</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        window.updateChart = function() {
+            const data = analyticsDataStore[document.getElementById('chart-selector').value];
+            if(!data) return;
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Макс. вага (кг)', data: data.weights, borderColor: '#f1f5f9', backgroundColor: 'rgba(241, 245, 249, 0.08)', borderWidth: 2, fill: true }] }, options: { scales: { y: { ticks: { color: '#8e8e93' } }, x: { ticks: { color: '#8e8e93' } } }, plugins: { legend: { labels: { color: '#f1f5f9' } } } } });
         }
 
         function generateScheduleLogic() {
             const days = parseInt(document.getElementById('days').value);
-            const minutes = parseInt(document.getElementById('minutes').value);
+            const totalMinutes = parseInt(document.getElementById('minutes').value) || 60;
             const absMode = document.getElementById('absMode').value;
-            const absMinutes = parseInt(document.getElementById('absMinutes').value);
+            const absMinutes = parseInt(document.getElementById('absMinutes').value) || 10;
             const isHome = document.getElementById('isHome').checked;
-
+            const compWeight = { "Високий": 3, "Середній": 2, "Легкий": 1 };
+            
             let availableEx = [...exercisesList];
-            if (isHome) {
-                const gymWords = ["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок", "кросовер", "гравітрон", "тренажер", "ролик"];
-                availableEx = availableEx.filter(e => e.equipment !== "Machine" && !gymWords.some(w => e.name.toLowerCase().includes(w)));
-            }
-
-            const warmups = availableEx.filter(e => e.category === "Warmup");
-            const cooldowns = availableEx.filter(e => e.category === "Cooldown");
-            const coreEx = availableEx.filter(e => e.category === "Core");
-            const mainEx = availableEx.filter(e => e.category === "Upper" || e.category === "Lower");
-
+            if (isHome) availableEx = availableEx.filter(e => e.equipment !== "Machine" && !["штанг", "станов", "румунськ", "фронтальн", "підтягування", "брус", "блок"].some(w => e.name.toLowerCase().includes(w)));
+            
             let splitPattern = [];
             if (days === 1) splitPattern.push("FullBody");
             else if (days === 2) splitPattern.push("Upper", "Lower");
             else if (days === 3) splitPattern.push("Upper", "Lower", "FullBody");
             else if (days === 4) splitPattern.push("Upper", "Lower", "Upper", "Lower");
-            else if (days === 5) splitPattern.push("Upper", "Lower", "Upper", "Lower", "FullBody");
             else { for(let i=0; i<days; i++) splitPattern.push(i % 2 === 0 ? "Upper" : "Lower"); }
-
             if (absMode === "separate" && days >= 2) splitPattern[days - 1] = "Core";
+            
+            const activeMinutes = Math.max(20, totalMinutes - 10);
+            const exercisesCount = Math.min(7, Math.max(3, Math.round(activeMinutes / 11)));
 
             let schedule = [];
             for(let i=0; i<days; i++) {
-                let currentCategory = splitPattern[i];
-                let todaysEx = [];
-
-                if (currentCategory === "FullBody") {
-                    let upper = mainEx.filter(e => e.category === "Upper").sort(() => Math.random() - 0.5);
-                    let lower = mainEx.filter(e => e.category === "Lower").sort(() => Math.random() - 0.5);
-                    let max = Math.max(upper.length, lower.length);
-                    for(let j=0; j<max; j++) {
-                        if (j < lower.length) todaysEx.push(lower[j]);
-                        if (j < upper.length) todaysEx.push(upper[j]);
+                let cat = splitPattern[i];
+                let basePool = availableEx.filter(e => cat === "FullBody" ? (e.category === "Upper" || e.category === "Lower") : e.category === cat);
+                
+                let exForDay = basePool.sort(() => Math.random() - 0.5).slice(0, exercisesCount);
+                if (absMode === "everyday" && cat !== "Core") {
+                    let corePool = availableEx.filter(e => e.category === "Core");
+                    if (corePool.length > 0) {
+                        let selectedCore = corePool[Math.floor(Math.random() * corePool.length)];
+                        selectedCore.sets = Math.max(2, Math.round(absMinutes / 3));
+                        exForDay.push(selectedCore);
                     }
-                } else {
-                    todaysEx = availableEx.filter(e => e.category === currentCategory).sort(() => Math.random() - 0.5);
                 }
 
+                exForDay.sort((a, b) => (compWeight[b.complexity] || 0) - (compWeight[a.complexity] || 0)); 
+                
                 let dailyList = [];
-                let currentMinutes = 0;
-                let timeLimit = minutes;
-
-                let w = warmups.sort(() => Math.random() - 0.5)[0];
-                if (w) { dailyList.push(mapEx(w, cloudData.history)); currentMinutes += w.timeMinutes; }
-
-                if (absMode === "everyday" && currentCategory !== "Core") timeLimit -= absMinutes;
-
-                for(let ex of todaysEx) {
-                    if (currentMinutes + ex.timeMinutes + 5 <= timeLimit) {
-                        dailyList.push(mapEx(ex, cloudData.history));
-                        currentMinutes += ex.timeMinutes;
-                    }
-                }
-
-                let c = cooldowns.sort(() => Math.random() - 0.5)[0];
-                if (c) { dailyList.push(mapEx(c, cloudData.history)); currentMinutes += c.timeMinutes; }
-
-                let uaCategory = currentCategory === "Upper" ? "Верх тіла" : (currentCategory === "Lower" ? "Низ тіла" : (currentCategory === "Core" ? "Прес" : "Все тіло"));
-                schedule.push({ dayName: `День ${i + 1} — ${uaCategory}`, totalTime: currentMinutes, exercises: dailyList });
+                let w = availableEx.find(e => e.category === "Warmup");
+                if(w) dailyList.push(mapEx(w));
+                exForDay.forEach(e => dailyList.push(mapEx(e)));
+                let c = availableEx.find(e => e.category === "Cooldown");
+                if(c) dailyList.push(mapEx(c));
+                
+                schedule.push({ dayName: `День ${i + 1} (${cat === 'Upper' ? 'Верх' : (cat === 'Lower' ? 'Низ' : (cat === 'Core' ? 'Прес' : 'Фулбаді'))})`, totalTime: totalMinutes, exercises: dailyList });
             }
             return schedule;
         }
 
-        function mapEx(ex, history) {
-            let prog = history[ex.id];
-            let setsCount = (prog && prog.sets > 0) ? prog.sets : ex.defaultSets;
-            let sw = [];
-            for(let s=0; s<setsCount; s++) {
-                let oldW = (prog && prog.setWeights && prog.setWeights.length > s) ? prog.setWeights[s] : 0;
-                sw.push(oldW > 0 ? oldW : 0);
-            }
-            return { ...ex, sets: setsCount, reps: ex.defaultReps, suggestedWeights: sw };
-        }
-
-        function renderExerciseHtml(ex, uniqueId) {
-            let setInputsHtml = '';
-            for(let i=0; i<ex.sets; i++) {
-                let w = (ex.suggestedWeights && ex.suggestedWeights[i]) ? ex.suggestedWeights[i] : '';
-                let disabled = (ex.category === "Warmup" || ex.category === "Cooldown") ? "disabled" : "";
-                
-                setInputsHtml += `
-                    <div class="set-row">
-                        <span class="text-sm">Підхід ${i+1}</span>
-                        <div class="weight-flex">
-                            <input type="number" step="0.5" class="prog-input text-center" value="${w > 0 ? w : ''}" placeholder="0" ${disabled} oninput="autoSaveWeight(this, '${ex.id}', ${i})">
-                            <span class="text-sm text-muted">кг</span>
-                        </div>
-                        <span class="text-sm text-muted">× ${ex.reps}</span>
-                        ${disabled === "" ? `<button class="outline-btn" style="padding: 4px 8px; font-size:11px;" onclick="startRestTimer()">⏳ 90с</button>` : ''}
-                    </div>`;
-            }
-
-            return `
-                <div class="exercise-card">
-                    <div class="exercise-top">
-                        <div>
-                            <span class="exercise-title">${ex.name}</span>
-                            <span class="text-sm text-muted">${ex.sets} підходів • ${ex.reps}</span>
-                        </div>
-                        <button class="outline-btn" onclick="toggleInfo('${uniqueId}')">Опис</button>
-                    </div>
-                    <div id="info-${uniqueId}" class="info-box hidden"><strong>Техніка:</strong> ${ex.description}</div>
-                    <div class="sets-stack">${setInputsHtml}</div>
-                </div>`;
-        }
-
-        function toggleInfo(id) { document.getElementById(`info-${id}`).classList.toggle('hidden'); }
-
-        function autoSaveWeight(inputElement, exId, setIndex) {
-            const val = parseFloat(inputElement.value) || 0;
-            const today = new Date().toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'});
-
-            if (!cloudData.history[exId]) {
-                cloudData.history[exId] = { sets: 4, setWeights: [], historyDates: [], historyWeights: [] };
-            }
+        function mapEx(ex) {
+            let prog = cloudData.history[ex.id];
+            let sets = (prog && prog.sets > 0) ? prog.sets : ex.defaultSets;
+            let reps = ex.defaultReps;
             
-            let oldWeight = cloudData.history[exId].setWeights[setIndex] || 0;
-            cloudData.history[exId].setWeights[setIndex] = val;
-
-            if (val > 0) {
-                cloudData.history[exId].historyDates.push(today);
-                cloudData.history[exId].historyWeights.push(val);
-                if (val > oldWeight && oldWeight > 0) {
-                    showToast(`🔥 Прогрес! +${(val - oldWeight).toFixed(1)} кг!`);
+            if (!reps.includes("хв") && !reps.includes("сек")) {
+                if (cloudData.goal === "lose_weight") {
+                    sets = Math.max(3, sets - 1);
+                    reps = "15-20";
+                } else if (cloudData.goal === "build_muscle") {
+                    sets = Math.max(3, sets);
+                    reps = "8-12";
                 }
             }
-            saveCloudData();
-        }
 
-        // Таймер відпочинку з можливістю дострокового завершення
-        function startRestTimer() {
-            clearInterval(timerInterval);
-            let timeLeft = 90;
-            const bar = document.getElementById('rest-timer-bar');
-            const display = document.getElementById('timer-display');
-            bar.classList.remove('hidden');
-
-            timerInterval = setInterval(() => {
-                let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-                let s = (timeLeft % 60).toString().padStart(2, '0');
-                display.innerText = `${m}:${s}`;
-                if (timeLeft <= 0) {
-                    stopRestTimer();
-                    if (navigator.vibrate) navigator.vibrate(200);
+            let sw = [];
+            for(let s=0; s<sets; s++) {
+                let baseWeight = (prog && prog.setWeights && prog.setWeights[s]) ? prog.setWeights[s] : 0;
+                if (prog && prog.historyWeights && prog.historyWeights.length >= 2) {
+                    let trainingCount = prog.count || 0;
+                    if (trainingCount > 0 && trainingCount % 2 === 0) {
+                        let step = (ex.equipment === "Machine") ? 5 : 1;
+                        baseWeight += step;
+                    }
                 }
-                timeLeft--;
-            }, 1000);
-        }
-
-        function stopRestTimer() {
-            clearInterval(timerInterval);
-            document.getElementById('rest-timer-bar').classList.add('hidden');
-        }
-
-        function showToast(text) {
-            const toast = document.createElement('div');
-            toast.className = 'toast-msg';
-            toast.innerText = text;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-
-        // Виправлене перемикання тем
-        function toggleTheme() {
-            const body = document.body;
-            const current = body.getAttribute('data-theme');
-            body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
-        }
-
-        function openBackupModal() { document.getElementById('backup-modal').classList.remove('hidden'); }
-        function closeBackupModal() { document.getElementById('backup-modal').classList.add('hidden'); }
-
-        function exportDataJSON() {
-            const blob = new Blob([JSON.stringify(cloudData, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `backup_workout.json`;
-            a.click();
-        }
-
-        function importDataJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    cloudData = JSON.parse(e.target.result);
-                    saveCloudData();
-                    showToast("✅ Імпорт успішний!");
-                    setTimeout(() => location.reload(), 1500);
-                } catch (err) {
-                    alert("Помилка JSON файлу!");
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function switchTab(tab) {
-            document.getElementById('tab-workout').classList.add('hidden');
-            document.getElementById('tab-analytics').classList.add('hidden');
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            if (tab === 'analytics') loadAnalytics();
-        }
-
-        function loadAnalytics() {
-            const history = cloudData.history;
-            analyticsDataStore = Object.keys(history).filter(k => history[k].historyWeights && history[k].historyWeights.length > 0).map(k => {
-                let ex = exercisesList.find(e => e.id === k);
-                return { name: ex ? ex.name : k, dates: history[k].historyDates, weights: history[k].historyWeights };
-            });
-
-            const selector = document.getElementById('chart-selector');
-            selector.innerHTML = '';
-            if(analyticsDataStore.length === 0) {
-                selector.innerHTML = '<option>Немає даних аналітики</option>';
-                if(myChart) myChart.destroy();
-                return;
+                sw.push(baseWeight > 0 ? baseWeight : 0);
             }
-            analyticsDataStore.forEach((item, index) => { selector.innerHTML += `<option value="${index}">${item.name}</option>`; });
-            updateChart();
-        }
 
-        function updateChart() {
-            const index = document.getElementById('chart-selector').value;
-            const data = analyticsDataStore[index];
-            if(!data) return;
-            const ctx = document.getElementById('progressChart').getContext('2d');
-            if (myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: data.dates, datasets: [{ label: 'Макс. вага (кг)', data: data.weights, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.2, fill: true }] },
-                options: { scales: { y: { ticks: { color: 'var(--text-muted)' } }, x: { ticks: { color: 'var(--text-muted)' } } }, plugins: { legend: { labels: { color: 'var(--text-color)' } } } }
-            });
+            return { ...ex, sets: sets, reps: reps, suggestedWeights: sw };
         }
     </script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('Service Worker зареєстровано!', reg))
+                .catch(err => console.log('Помилка реєстрації Service Worker:', err));
+        });
+    }
+</script>
 </body>
 </html>

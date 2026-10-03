@@ -1,27 +1,39 @@
-const CACHE_NAME = 'workout-pwa-v1';
-const urlsToCache = [
-  './index.html',
-  './style.css',
-  './exercises.js',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap'
+const CACHE_NAME = 'workout-app-v1';
+const assetsToCache = [
+    './',
+    './index.html',
+    './style.css',
+    './exercises.js',
+    './manifest.json',
+    './icon.png',
+    'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-// Встановлення і кешування файлів
+// Встановлення сервіс-воркера і кешування файлів
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-  );
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.addAll(assetsToCache);
+        })
+    );
 });
 
-// Віддача файлів без інтернету
+// Активація та видалення старих кешів
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(keys => {
+            return Promise.all(
+                keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+            );
+        })
+    );
+});
+
+// Перехоплення запитів з мережі
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) return response; // Якщо є в кеші (немає інтернету)
-        return fetch(event.request);   // Якщо є інтернет
-      })
-  );
+    event.respondWith(
+        caches.match(event.request).then(cachedResponse => {
+            return cachedResponse || fetch(event.request);
+        })
+    );
 });
